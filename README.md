@@ -97,6 +97,7 @@ GitHub Pages 주소를 폰에서 열면 폰은 PC의 LLM에 닿을 수 없어서
 PC와 폰이 **같은 와이파이**라면, LLM 서버가 앱 화면까지 보내 주는 방식으로 폰에서도 LLM과 대화할 수 있습니다.
 
 1. PC에서 `./run_local.sh --lan` (또는 `python3 llm_server.py --lan`)
+   - 포트를 바꾸려면 `./run_local.sh --lan --port 5000` → 주소가 `http://<PC IP>:5000` (아래 7861도 5000으로)
 2. Windows 설정 (처음 한 번):
    - VS Code 설정(`Ctrl+,`)에서 **Remote: Local Port Host** → `allInterfaces`
      (Dev Container의 포트를 Windows의 모든 네트워크에 연결. 바꾼 뒤 VS Code 창 다시 열기)
