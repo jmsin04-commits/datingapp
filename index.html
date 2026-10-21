@@ -466,7 +466,10 @@
       </div>
       <br>
       <label class="field"><span class="label">지역</span><select name="region"></select></label>
-      <label class="field"><span class="label">관심사</span><select name="interest"></select></label>
+      <div class="field"><span class="label">관심사 <span class="hint">(여러 개 선택 가능 · 하나라도 겹치면 보여줘요)</span></span>
+        <div class="chips" id="filter-chips"></div>
+      </div>
+      <br>
       <div class="row">
         <button class="btn ghost" value="reset" type="submit">초기화</button>
         <button class="btn" value="apply" type="submit">적용</button>
@@ -516,7 +519,7 @@
       const MAX_INTERESTS = 5;
       const MAX_PHOTOS = 4;
       const THIS_YEAR = new Date().getFullYear();
-      const DEFAULT_FILTERS = { min_age: 19, max_age: 45, region: "", interest: "" };
+      const DEFAULT_FILTERS = { min_age: 19, max_age: 45, region: "", interests: [] };
 
       const { SUPABASE_URL, SUPABASE_KEY } = window.DATING_CONFIG || {};
       const ONLINE = Boolean(SUPABASE_URL && SUPABASE_KEY);
@@ -621,7 +624,7 @@
           async candidates(f) {
             return check(await sb.rpc("get_candidates", {
               min_age: f.min_age, max_age: f.max_age,
-              f_region: f.region || null, f_interest: f.interest || null,
+              f_region: f.region || null, f_interests: f.interests.length ? f.interests : null,
             }));
           },
           async swipe(targetId, like) {
@@ -868,9 +871,20 @@
           ["d14", "시우", 1994, "M", "M", "경기", ["운동", "요리", "영화"], "운동 끝나고 건강하게 요리해 먹는 루틴러."],
           ["d15", "채원", 1993, "F", "M", "제주", ["여행", "사진", "등산"], "제주 살아요. 오름 같이 오를 사람 🌿"],
           ["d16", "건우", 1999, "M", "F", "울산", ["게임", "맛집", "반려동물"], "강아지 산책 메이트 구합니다 (강아지가 사람을 좋아해요)"],
+          ["d17", "소윤", 2004, "F", "M", "서울", ["카페", "패션", "음악"], "대학교 3학년이에요! 홍대·연남 카페 투어 같이 해요 ☕"],
+          ["d18", "민서", 2001, "F", "M", "경기", ["러닝", "운동", "맛집"], "필라테스랑 러닝 하는 갓생러… 운동 끝나고 먹는 떡볶이가 최고"],
+          ["d19", "가은", 1998, "F", "M", "서울", ["독서", "전시회", "와인"], "주말엔 서점이랑 미술관. 조용히 오래 얘기하는 거 좋아해요"],
+          ["d20", "나연", 2002, "F", "M", "부산", ["여행", "사진", "드라이브"], "광안리 근처 살아요 🌊 바다 사진 찍으러 같이 가요!"],
+          ["d21", "하은", 1996, "F", "ALL", "인천", ["요리", "반려동물", "영화"], "강아지 한 마리랑 살아요. 집밥 + 영화 데이트 좋아해요"],
+          ["d22", "윤아", 2005, "F", "M", "대전", ["공연", "음악", "게임"], "아이돌 콘서트 다니는 게 낙! 노래방 점수 90점 이상 ㅎㅎ"],
+          ["d23", "지훈", 2000, "M", "F", "서울", ["운동", "여행", "카페"], "클라이밍 2년차예요. 같이 볼더링 가실 분 🧗"],
+          ["d24", "은우", 2003, "M", "F", "경기", ["게임", "영화", "맛집"], "공대생입니다. 맛집 리스트 엑셀로 관리해요 ㅋㅋ"],
+          ["d25", "서진", 1997, "M", "F", "서울", ["와인", "요리", "전시회"], "요리하는 남자. 직접 만든 파스타 대접해 드릴게요 🍝"],
+          ["d26", "재민", 2001, "M", "ALL", "제주", ["등산", "사진", "드라이브"], "제주에서 일해요. 오름이랑 해안도로 가이드 가능합니다"],
         ];
         const JOBS = ["UX 디자이너", "백엔드 개발자", "대학원생", "마케터", "요리 강사", "게임 기획자", "공연 기획자", "공무원",
-          "대학생", "변호사", "승무원", "패션 MD", "작곡가", "헬스 트레이너", "게스트하우스 사장", "동물병원 직원"];
+          "대학생", "변호사", "승무원", "패션 MD", "작곡가", "헬스 트레이너", "게스트하우스 사장", "동물병원 직원",
+          "대학생", "필라테스 강사", "출판사 편집자", "대학생", "간호사", "대학생", "스타트업 PM", "대학생", "셰프", "리조트 직원"];
         const PROFILES = SEED.map(([id, name, birth_year, gender, looking_for, region, interests, bio], i) =>
           ({ id, name, birth_year, gender, looking_for, region, interests, bio, job: JOBS[i], likesYou: i % 3 !== 2 }));
         const reply = createDemoChatBot();
@@ -920,7 +934,7 @@
               && (p.looking_for === "ALL" || p.looking_for === me.gender)
               && age(p) >= f.min_age && age(p) <= f.max_age
               && (!f.region || p.region === f.region)
-              && (!f.interest || p.interests.includes(f.interest))
+              && (!f.interests.length || p.interests.some((x) => f.interests.includes(x)))
             ).sort(() => Math.random() - 0.5);
           },
           async swipe(targetId, like) {
@@ -985,7 +999,7 @@
       let api;
       const state = {
         me: null,
-        filters: { ...DEFAULT_FILTERS, ...store.get("seollem-filters", {}) },
+        filters: loadFilters(),
         deck: [],
         busy: false,
         matches: [],
@@ -994,6 +1008,15 @@
         unsubscribe: null,
         view: store.get("seollem-view", "card") === "grid" ? "grid" : "card",
       };
+      function loadFilters() {
+        const saved = store.get("seollem-filters", {});
+        // 예전 버전(관심사 하나만 선택) 저장값도 그대로 읽기
+        if (saved.interest && !saved.interests) saved.interests = [saved.interest];
+        delete saved.interest;
+        const f = { ...DEFAULT_FILTERS, ...saved };
+        f.interests = (Array.isArray(f.interests) ? f.interests : []).filter((x) => INTERESTS.includes(x));
+        return f;
+      }
       const saveUnread = () => store.set("seollem-unread", [...state.unread]);
 
       function show(id) {
@@ -1007,7 +1030,12 @@
       }
       fillSelect($("#profile-form").elements.region, REGIONS);
       fillSelect($("#filter-form").elements.region, REGIONS, "전체");
-      fillSelect($("#filter-form").elements.interest, INTERESTS, "전체");
+      $("#filter-chips").innerHTML = INTERESTS
+        .map((v) => `<button type="button" class="chip" aria-pressed="false" data-v="${esc(v)}">${esc(v)}</button>`).join("");
+      $("#filter-chips").addEventListener("click", (e) => {
+        const chip = e.target.closest(".chip");
+        if (chip) chip.setAttribute("aria-pressed", String(chip.getAttribute("aria-pressed") !== "true"));
+      });
       $("#interest-chips").innerHTML = INTERESTS
         .map((v) => `<button type="button" class="chip" aria-pressed="false" data-v="${esc(v)}">${esc(v)}</button>`).join("");
       $("#interest-chips").addEventListener("click", (e) => {
@@ -1416,7 +1444,9 @@
         f.elements.min_age.value = state.filters.min_age;
         f.elements.max_age.value = state.filters.max_age;
         f.elements.region.value = state.filters.region;
-        f.elements.interest.value = state.filters.interest;
+        for (const chip of $("#filter-chips").children) {
+          chip.setAttribute("aria-pressed", String(state.filters.interests.includes(chip.dataset.v)));
+        }
         $("#filter-dialog").showModal();
       }
       $("#open-filter").addEventListener("click", openFilter);
@@ -1429,7 +1459,8 @@
           let min = Math.max(19, Number(f.elements.min_age.value) || 19);
           let max = Math.min(99, Number(f.elements.max_age.value) || 99);
           if (min > max) [min, max] = [max, min];
-          state.filters = { min_age: min, max_age: max, region: f.elements.region.value, interest: f.elements.interest.value };
+          const interests = [...$("#filter-chips").querySelectorAll("[aria-pressed=true]")].map((c) => c.dataset.v);
+          state.filters = { min_age: min, max_age: max, region: f.elements.region.value, interests };
         } else {
           return;
         }

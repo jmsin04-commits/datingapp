@@ -127,11 +127,13 @@ revoke execute on function public.swipe(uuid, boolean) from public, anon;
 grant execute on function public.swipe(uuid, boolean) to authenticated;
 
 -- 아직 안 본 상대 중 서로 성별 조건이 맞고 필터를 통과하는 사람 (무작위 30명)
+-- f_interests: 고른 관심사 중 하나라도 겹치면 통과 (null이면 관심사 무관)
+drop function if exists public.get_candidates(int, int, text, text);  -- 예전 버전(관심사 1개)
 create or replace function public.get_candidates(
   min_age int default 19,
   max_age int default 99,
   f_region text default null,
-  f_interest text default null
+  f_interests text[] default null
 )
 returns setof public.profiles
 language sql
@@ -146,12 +148,12 @@ as $$
     and (p.looking_for = 'ALL' or p.looking_for = me.gender)
     and extract(year from now())::int - p.birth_year between min_age and max_age
     and (f_region is null or p.region = f_region)
-    and (f_interest is null or f_interest = any (p.interests))
+    and (f_interests is null or cardinality(f_interests) = 0 or p.interests && f_interests)
     and not exists (select 1 from likes l where l.from_id = me.id and l.to_id = p.id)
   order by random()
   limit 30;
 $$;
-grant execute on function public.get_candidates(int, int, text, text) to authenticated;
+grant execute on function public.get_candidates(int, int, text, text[]) to authenticated;
 
 -- 내 매칭 목록 + 상대 프로필 + 마지막 메시지 (최근 대화 순)
 drop function if exists public.my_matches();  -- 반환 컬럼이 바뀌면 다시 만들어야 함
