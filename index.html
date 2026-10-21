@@ -140,18 +140,12 @@
     .auth-hero p { margin: 0; color: var(--muted); }
     .row { display: flex; gap: 8px; }
 
-    /* ───── 카드 스와이프 ───── */
-    .deck { position: relative; flex: 1; min-height: 0; margin-bottom: 12px; }
+    /* ───── 프로필 카드 (내 프로필 · 프로필 자세히 보기) ───── */
     .card {
       position: absolute; inset: 0; border-radius: 24px; overflow: hidden;
       background: var(--surface); box-shadow: var(--shadow);
-      display: flex; flex-direction: column;
-      touch-action: none; user-select: none; -webkit-user-select: none;
-      transition: transform 0.3s ease, opacity 0.3s ease;
-      --like: 0; --nope: 0;
+      display: flex; flex-direction: column; user-select: none; -webkit-user-select: none;
     }
-    .card.under { transform: scale(0.95) translateY(10px); opacity: 0.85; }
-    .card.top { cursor: grab; }
     .card .photo {
       flex: 1; min-height: 120px; display: grid; place-items: center;
       font-size: clamp(4rem, 22vw, 8rem); font-weight: 800; color: rgba(255, 255, 255, 0.92);
@@ -167,7 +161,6 @@
     .bars { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; gap: 4px; z-index: 1; }
     .bars i { flex: 1; height: 3px; border-radius: 2px; background: rgba(255, 255, 255, 0.45); }
     .bars i.on { background: #fff; }
-    .stamp { z-index: 2; }
     .card .info { padding: 16px 18px 20px; }
     .card .name { font-size: 1.5rem; font-weight: 800; margin: 0; letter-spacing: -0.02em; }
     .card .name small { font-size: 1.1rem; font-weight: 500; color: var(--muted); margin-left: 6px; }
@@ -178,12 +171,6 @@
     }
     .tags { display: flex; flex-wrap: wrap; gap: 6px; }
     .tag { font-size: 0.8rem; padding: 3px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
-    .stamp {
-      position: absolute; top: 28px; padding: 4px 14px; border: 4px solid; border-radius: 10px;
-      font-size: 1.8rem; font-weight: 900; letter-spacing: 0.05em; pointer-events: none;
-    }
-    .stamp.like { left: 24px; color: #22c55e; transform: rotate(-14deg); opacity: var(--like); }
-    .stamp.nope { right: 24px; color: #ef4444; transform: rotate(14deg); opacity: var(--nope); }
 
     .actions { display: flex; justify-content: center; gap: 28px; padding: 4px 0 12px; }
     .round {
@@ -196,12 +183,9 @@
     .round:active { transform: scale(0.92); }
 
     .top-actions { display: flex; gap: 8px; align-items: center; }
-    .view-toggle { display: flex; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
-    .view-toggle button { border: 0; background: var(--surface); padding: 8px 12px; font-size: 0.9rem; color: var(--muted); }
-    .view-toggle button[aria-pressed=true] { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
 
     /* ───── 목록 보기 (여러 명) ───── */
-    /* 폰은 한 줄에 3명, PC(640px 이상)는 5명. 목록 보기일 때는 화면을 넓게 씀 */
+    /* 폰은 한 줄에 3명, PC(640px 이상)는 5명. 탐색 탭은 화면을 넓게 씀 */
     #main.wide { max-width: 1000px; }
     .grid {
       flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -427,20 +411,11 @@
       <div class="top">
         <h1>설레임<span class="pill" id="demo-pill" hidden>데모</span></h1>
         <div class="top-actions">
-          <div class="view-toggle" role="group" aria-label="보기 방식">
-            <button type="button" data-view="card" aria-pressed="true">카드</button>
-            <button type="button" data-view="grid" aria-pressed="false">목록</button>
-          </div>
           <button class="icon-btn" id="open-filter" type="button">⚙︎ 필터</button>
         </div>
       </div>
-      <div class="filter-bar" id="filter-bar" hidden></div>
-      <div class="grid" id="grid" hidden></div>
-      <div class="deck" id="deck"></div>
-      <div class="actions" id="actions">
-        <button class="round pass" id="btn-pass" type="button" aria-label="넘기기">✕</button>
-        <button class="round like" id="btn-like" type="button" aria-label="좋아요">♥</button>
-      </div>
+      <div class="filter-bar" id="filter-bar"></div>
+      <div class="grid" id="grid"></div>
     </section>
 
     <section class="screen" id="tab-chats" hidden>
@@ -1131,12 +1106,10 @@
         me: null,
         filters: loadFilters(),
         deck: [],
-        busy: false,
         matches: [],
         openMatch: null,
         unread: new Set(store.get("seollem-unread", [])),
         unsubscribe: null,
-        view: store.get("seollem-view", "card") === "grid" ? "grid" : "card",
       };
       function loadFilters() {
         const saved = store.get("seollem-filters", {});
@@ -1189,8 +1162,6 @@
               <div class="tags">${(p.interests || []).map((t) => `<span class="tag">${esc(t)}</span>`).join("")}</div>
               ${p.bio ? `<p class="bio">${esc(p.bio)}</p>` : ""}
             </div>
-            <div class="stamp like">LIKE</div>
-            <div class="stamp nope">NOPE</div>
           </div>`;
       }
       function photoHTML(p) {
@@ -1366,7 +1337,7 @@
           b.setAttribute("aria-selected", String(b.dataset.tab === name));
         }
         for (const t of ["discover", "chats", "me"]) $("#tab-" + t).hidden = t !== name;
-        $("#main").classList.toggle("wide", name === "discover" && state.view === "grid");
+        $("#main").classList.toggle("wide", name === "discover");
         if (name === "chats") refreshMatches();
         if (name === "me") renderMe();
       }
@@ -1393,27 +1364,9 @@
           <button class="btn" type="button" data-action="filter">필터 바꾸기</button>
         </div>`;
 
-      function renderDiscover() {
-        const grid = state.view === "grid";
-        for (const b of document.querySelectorAll(".view-toggle button")) {
-          b.setAttribute("aria-pressed", String(b.dataset.view === state.view));
-        }
-        $("#grid").hidden = !grid;
-        renderFilterBar();
-        $("#main").classList.toggle("wide", grid);
-        $("#deck").hidden = grid;
-        if (grid) { $("#actions").hidden = true; renderGrid(); }
-        else renderDeck();
-      }
-      document.querySelector(".view-toggle").addEventListener("click", (e) => {
-        const b = e.target.closest("[data-view]");
-        if (!b || state.busy) return;
-        state.view = b.dataset.view;
-        store.set("seollem-view", state.view);
-        renderDiscover();
-      });
+      const renderDiscover = () => renderGrid();
 
-      // ───── 목록 보기: 여러 명을 한 화면에 ─────
+      // ───── 탐색: 필터에 맞는 사람들을 목록으로 ─────
       function tileHTML(p) {
         const first = (p.photos || [])[0];
         const ph = first
@@ -1430,8 +1383,6 @@
       }
       function renderFilterBar() {
         const bar = $("#filter-bar");
-        bar.hidden = state.view !== "grid";
-        if (bar.hidden) return;
         const f = state.filters;
         const n = state.deck.length;
         const conds = [`${f.min_age}~${f.max_age}세`, f.region || "전국", f.interests.length ? f.interests.join("·") : "관심사 전체"];
@@ -1500,75 +1451,7 @@
         });
       }
 
-      function renderDeck() {
-        const deck = $("#deck");
-        const top = state.deck[0];
-        $("#actions").hidden = !top;
-        if (!top) {
-          deck.innerHTML = EMPTY_HTML;
-          return;
-        }
-        deck.innerHTML = (state.deck[1] ? cardHTML(state.deck[1], "under") : "") + cardHTML(top, "top");
-        bindDrag(deck.querySelector(".card.top"));
-      }
-      $("#deck").addEventListener("click", (e) => {
-        if (e.target.closest("[data-action=filter]")) openFilter();
-      });
-
-      function bindDrag(card) {
-        let startX = 0, startY = 0, dx = 0, dy = 0, dragging = false;
-        card.addEventListener("pointerdown", (e) => {
-          if (state.busy) return;
-          dragging = true; dx = 0; dy = 0;
-          startX = e.clientX; startY = e.clientY;
-          card.setPointerCapture(e.pointerId);
-          card.style.transition = "none";
-        });
-        card.addEventListener("pointermove", (e) => {
-          if (!dragging) return;
-          dx = e.clientX - startX;
-          dy = e.clientY - startY;
-          card.style.transform = `translate(${dx}px, ${dy * 0.3}px) rotate(${dx / 18}deg)`;
-          card.style.setProperty("--like", Math.max(0, Math.min(1, dx / 100)));
-          card.style.setProperty("--nope", Math.max(0, Math.min(1, -dx / 100)));
-        });
-        const end = (e) => {
-          if (!dragging) return;
-          dragging = false;
-          card.style.transition = "";
-          if (Math.abs(dx) > 100) {
-            swipe(dx > 0);
-          } else {
-            if (e.type === "pointerup" && Math.abs(dx) < 6 && Math.abs(dy) < 6) cyclePhoto(card, e.clientX);
-            card.style.transform = "";
-            card.style.setProperty("--like", 0);
-            card.style.setProperty("--nope", 0);
-          }
-        };
-        card.addEventListener("pointerup", end);
-        card.addEventListener("pointercancel", end);
-      }
-
-      async function swipe(like) {
-        const card = $("#deck .card.top");
-        const person = state.deck[0];
-        if (!card || !person || state.busy) return;
-        state.busy = true;
-
-        card.style.setProperty(like ? "--like" : "--nope", 1);
-        card.style.transform = `translate(${like ? 140 : -140}vw, 40px) rotate(${like ? 30 : -30}deg)`;
-        card.style.opacity = "0";
-        const under = $("#deck .card.under");
-        if (under) under.classList.remove("under");
-
-        const [result] = await Promise.all([decide(person, like), new Promise((r) => setTimeout(r, 280))]);
-        if (state.deck.length === 0) await loadDeck();
-        else renderDeck();
-        state.busy = false;
-        if (result.matchId) showMatch(person, result.matchId);
-      }
-
-      // 좋아요/넘기기 저장 + 후보에서 빼기 (카드/목록 공통)
+      // 좋아요/넘기기 저장 + 후보에서 빼기
       async function decide(person, like) {
         let matchId = null;
         try {
@@ -1586,14 +1469,6 @@
         }
         return { ok: true, matchId };
       }
-      $("#btn-like").addEventListener("click", () => swipe(true));
-      $("#btn-pass").addEventListener("click", () => swipe(false));
-      document.addEventListener("keydown", (e) => {
-        if ($("#main").hidden || $("#tab-discover").hidden || !$("#chat").hidden || state.view !== "card"
-          || document.querySelector("dialog[open]") || e.target.closest("input, textarea, select")) return;
-        if (e.key === "ArrowRight") swipe(true);
-        if (e.key === "ArrowLeft") swipe(false);
-      });
 
       // ───── 필터 ─────
       function openFilter() {
@@ -1623,10 +1498,6 @@
         }
         $("#filter-dialog").returnValue = "";
         store.set("seollem-filters", state.filters);
-        // 필터를 바꾸면 맞는 사람들을 목록으로 한눈에 보여줌
-        state.view = "grid";
-        store.set("seollem-view", state.view);
-        selectTab("discover");
         loadDeck();
       });
 
