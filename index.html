@@ -1,0 +1,1091 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#fbf7f5" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#161314" media="(prefers-color-scheme: dark)">
+  <title>설레임 소개팅</title>
+  <meta name="description" content="스와이프로 마음에 드는 사람을 찾고, 서로 좋아요하면 바로 대화해보세요.">
+  <style>
+    :root {
+      --bg: #fbf7f5;
+      --surface: #ffffff;
+      --text: #1f1b1c;
+      --muted: #77706f;
+      --line: #ece4e1;
+      --accent: #ff4f6d;
+      --accent-soft: #ffe5ea;
+      --accent-text: #ffffff;
+      --nope: #6b6b70;
+      --bubble-other: #f1ecea;
+      --shadow: 0 10px 30px rgba(60, 20, 30, 0.12);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #161314;
+        --surface: #221e1f;
+        --text: #f4f0f0;
+        --muted: #a69e9e;
+        --line: #352f30;
+        --accent: #ff5f7b;
+        --accent-soft: #3d1f26;
+        --accent-text: #ffffff;
+        --nope: #a0a0a6;
+        --bubble-other: #2e2829;
+        --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+      }
+    }
+
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard",
+        "Malgun Gothic", "Noto Sans KR", sans-serif;
+      line-height: 1.5;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-text-size-adjust: 100%;
+    }
+    button, input, select, textarea { font: inherit; color: inherit; }
+    button { cursor: pointer; }
+
+    /* 화면 전체 높이를 꽉 채우는 세로 레이아웃 */
+    .wrap {
+      max-width: 520px;
+      margin: 0 auto;
+      height: 100vh;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      padding:
+        max(12px, env(safe-area-inset-top))
+        max(16px, env(safe-area-inset-right))
+        0
+        max(16px, env(safe-area-inset-left));
+    }
+    .screen { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .scroll { overflow-y: auto; padding-bottom: 24px; }
+
+    .top { display: flex; align-items: center; justify-content: space-between; min-height: 44px; margin-bottom: 8px; }
+    .top h1 { font-size: 1.25rem; margin: 0; letter-spacing: -0.02em; }
+    .top h1 b { color: var(--accent); }
+    .pill { font-size: 0.75rem; padding: 2px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); margin-left: 6px; vertical-align: middle; }
+
+    .btn {
+      border: 0; border-radius: 14px; padding: 14px 18px; font-weight: 700;
+      background: var(--accent); color: var(--accent-text); width: 100%;
+    }
+    .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--line); }
+    .btn:disabled { opacity: 0.5; }
+    .icon-btn {
+      border: 1px solid var(--line); background: var(--surface); border-radius: 12px;
+      padding: 8px 12px; font-size: 0.9rem;
+    }
+    .error { color: var(--accent); min-height: 1.5em; font-size: 0.9rem; margin: 8px 0; }
+
+    /* ───── 폼 ───── */
+    .form label.field { display: block; margin-bottom: 18px; }
+    .form .label { display: block; font-weight: 700; font-size: 0.9rem; margin-bottom: 6px; }
+    .form .hint { color: var(--muted); font-weight: 400; font-size: 0.8rem; }
+    .form input[type=text], .form input[type=email], .form input[type=password],
+    .form input[type=number], .form select, .form textarea {
+      width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line);
+      background: var(--surface); font-size: 16px;
+    }
+    .form textarea { resize: vertical; min-height: 90px; }
+    .seg { display: flex; gap: 8px; }
+    .seg label { flex: 1; }
+    .seg input { position: absolute; opacity: 0; pointer-events: none; }
+    .seg span {
+      display: block; text-align: center; padding: 10px; border-radius: 12px;
+      border: 1px solid var(--line); background: var(--surface);
+    }
+    .seg input:checked + span { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+    .seg input:focus-visible + span { outline: 2px solid var(--accent); }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip {
+      border: 1px solid var(--line); background: var(--surface); border-radius: 999px;
+      padding: 6px 12px; font-size: 0.85rem;
+    }
+    .chip[aria-pressed=true] { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+
+    .auth-hero { text-align: center; padding: 8vh 0 32px; }
+    .auth-hero .logo { font-size: 3rem; }
+    .auth-hero h2 { margin: 8px 0 4px; font-size: 1.6rem; letter-spacing: -0.02em; }
+    .auth-hero p { margin: 0; color: var(--muted); }
+    .row { display: flex; gap: 8px; }
+
+    /* ───── 카드 스와이프 ───── */
+    .deck { position: relative; flex: 1; min-height: 0; margin-bottom: 12px; }
+    .card {
+      position: absolute; inset: 0; border-radius: 24px; overflow: hidden;
+      background: var(--surface); box-shadow: var(--shadow);
+      display: flex; flex-direction: column;
+      touch-action: none; user-select: none; -webkit-user-select: none;
+      transition: transform 0.3s ease, opacity 0.3s ease;
+      --like: 0; --nope: 0;
+    }
+    .card.under { transform: scale(0.95) translateY(10px); opacity: 0.85; }
+    .card.top { cursor: grab; }
+    .card .photo {
+      flex: 1; min-height: 120px; display: grid; place-items: center;
+      font-size: clamp(4rem, 22vw, 8rem); font-weight: 800; color: rgba(255, 255, 255, 0.92);
+      text-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    }
+    .card .info { padding: 16px 18px 20px; }
+    .card .name { font-size: 1.5rem; font-weight: 800; margin: 0; letter-spacing: -0.02em; }
+    .card .name small { font-size: 1.1rem; font-weight: 500; color: var(--muted); margin-left: 6px; }
+    .card .meta { color: var(--muted); font-size: 0.9rem; margin: 2px 0 10px; }
+    .card .bio {
+      margin: 10px 0 0; font-size: 0.95rem; word-break: keep-all;
+      display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .tags { display: flex; flex-wrap: wrap; gap: 6px; }
+    .tag { font-size: 0.8rem; padding: 3px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
+    .stamp {
+      position: absolute; top: 28px; padding: 4px 14px; border: 4px solid; border-radius: 10px;
+      font-size: 1.8rem; font-weight: 900; letter-spacing: 0.05em; pointer-events: none;
+    }
+    .stamp.like { left: 24px; color: #22c55e; transform: rotate(-14deg); opacity: var(--like); }
+    .stamp.nope { right: 24px; color: #ef4444; transform: rotate(14deg); opacity: var(--nope); }
+
+    .actions { display: flex; justify-content: center; gap: 28px; padding: 4px 0 12px; }
+    .round {
+      width: 64px; height: 64px; border-radius: 50%; border: 1px solid var(--line);
+      background: var(--surface); box-shadow: var(--shadow); font-size: 1.6rem;
+      display: grid; place-items: center;
+    }
+    .round.pass { color: var(--nope); }
+    .round.like { color: var(--accent); }
+    .round:active { transform: scale(0.92); }
+
+    .empty { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; color: var(--muted); gap: 12px; padding: 24px; }
+    .empty .big { font-size: 3rem; }
+    .empty .btn { width: auto; }
+
+    /* ───── 탭바 ───── */
+    .tabs {
+      display: flex; border-top: 1px solid var(--line); margin: 0 -16px;
+      padding-bottom: env(safe-area-inset-bottom); background: var(--bg);
+    }
+    .tabs button {
+      flex: 1; border: 0; background: none; padding: 10px 0 12px; color: var(--muted);
+      font-size: 0.75rem; display: flex; flex-direction: column; align-items: center; gap: 2px; position: relative;
+    }
+    .tabs button .ic { font-size: 1.3rem; line-height: 1.2; }
+    .tabs button[aria-selected=true] { color: var(--accent); font-weight: 700; }
+    .dot { position: absolute; top: 8px; left: calc(50% + 10px); width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+
+    /* ───── 매칭 목록 ───── */
+    .section-title { font-size: 0.85rem; color: var(--muted); font-weight: 700; margin: 12px 0 8px; }
+    .new-matches { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 6px; }
+    .new-matches button { border: 0; background: none; padding: 0; text-align: center; font-size: 0.8rem; flex: none; width: 64px; }
+    .avatar {
+      width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center;
+      color: #fff; font-weight: 800; font-size: 1.3rem; flex: none;
+    }
+    .new-matches .avatar { width: 60px; height: 60px; margin: 0 auto 4px; box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--accent); }
+    .convo {
+      display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 0;
+      border: 0; border-bottom: 1px solid var(--line); background: none; text-align: left;
+    }
+    .convo .txt { flex: 1; min-width: 0; }
+    .convo .who { font-weight: 700; }
+    .convo .last { color: var(--muted); font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .convo .when { color: var(--muted); font-size: 0.75rem; flex: none; }
+    .convo.unread .last { color: var(--text); font-weight: 700; }
+
+    /* ───── 채팅 ───── */
+    #chat { position: fixed; inset: 0; background: var(--bg); z-index: 10; }
+    #chat .wrap { padding-bottom: 0; }
+    .chat-head { display: flex; align-items: center; gap: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--line); margin: 0 -16px; padding-left: 8px; padding-right: 16px; }
+    .chat-head .back { border: 0; background: none; font-size: 1.5rem; padding: 4px 10px; }
+    .chat-head .avatar { width: 40px; height: 40px; font-size: 1rem; }
+    .chat-head .who { font-weight: 700; }
+    .chat-head .sub { font-size: 0.8rem; color: var(--muted); }
+    .msgs { flex: 1; overflow-y: auto; padding: 16px 0; display: flex; flex-direction: column; gap: 6px; }
+    .msg { max-width: 78%; padding: 8px 12px; border-radius: 18px; word-break: break-word; white-space: pre-wrap; }
+    .msg.mine { align-self: flex-end; background: var(--accent); color: var(--accent-text); border-bottom-right-radius: 6px; }
+    .msg.other { align-self: flex-start; background: var(--bubble-other); border-bottom-left-radius: 6px; }
+    .msg-time { font-size: 0.7rem; color: var(--muted); margin: 0 4px; }
+    .msg-time.mine { align-self: flex-end; }
+    .chat-hello { text-align: center; color: var(--muted); font-size: 0.9rem; margin: auto 0; }
+    .composer {
+      display: flex; gap: 8px; padding: 10px 0 max(10px, env(safe-area-inset-bottom));
+      border-top: 1px solid var(--line);
+    }
+    .composer input {
+      flex: 1; min-width: 0; padding: 12px 16px; border-radius: 999px; border: 1px solid var(--line);
+      background: var(--surface); font-size: 16px;
+    }
+    .composer button { border: 0; border-radius: 999px; padding: 0 18px; background: var(--accent); color: var(--accent-text); font-weight: 700; }
+
+    /* ───── 내 프로필 ───── */
+    .me-card { position: relative; height: 420px; margin-bottom: 16px; }
+    .me-card .card { position: absolute; touch-action: auto; }
+    .stack { display: flex; flex-direction: column; gap: 10px; }
+
+    /* ───── 다이얼로그 ───── */
+    dialog {
+      border: 0; border-radius: 24px; padding: 24px; width: min(420px, calc(100vw - 32px));
+      background: var(--surface); color: var(--text); box-shadow: var(--shadow);
+    }
+    dialog::backdrop { background: rgba(20, 10, 14, 0.55); }
+    dialog h3 { margin: 0 0 16px; font-size: 1.2rem; }
+    .match-dialog { text-align: center; }
+    .match-dialog .hearts { font-size: 2.6rem; }
+    .match-dialog h3 { font-size: 1.8rem; color: var(--accent); margin: 4px 0; }
+    .match-dialog p { color: var(--muted); margin: 0 0 20px; }
+    .match-dialog .pair { display: flex; justify-content: center; gap: 0; margin-bottom: 20px; }
+    .match-dialog .pair .avatar { width: 84px; height: 84px; font-size: 2rem; box-shadow: 0 0 0 4px var(--surface); }
+    .match-dialog .pair .avatar + .avatar { margin-left: -14px; }
+  </style>
+</head>
+<body>
+  <!-- ───────── 로그인 ───────── -->
+  <div class="wrap" id="auth" hidden>
+    <div class="screen scroll">
+      <div class="auth-hero">
+        <div class="logo">💘</div>
+        <h2>설레임</h2>
+        <p>넘기다 보면, 마음이 맞는 사람이 있어요</p>
+      </div>
+      <form class="form" id="auth-form">
+        <label class="field"><span class="label">이메일</span>
+          <input type="email" name="email" autocomplete="email" required></label>
+        <label class="field"><span class="label">비밀번호 <span class="hint">(6자 이상)</span></span>
+          <input type="password" name="password" autocomplete="current-password" minlength="6" required></label>
+        <p class="error" id="auth-error"></p>
+        <div class="stack">
+          <button class="btn" type="submit" data-mode="signin">로그인</button>
+          <button class="btn ghost" type="submit" data-mode="signup">처음이에요 · 회원가입</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ───────── 프로필 작성/수정 ───────── -->
+  <div class="wrap" id="setup" hidden>
+    <div class="top"><h1 id="setup-title">프로필 만들기</h1>
+      <button class="icon-btn" id="setup-cancel" type="button" hidden>취소</button></div>
+    <div class="screen scroll">
+      <form class="form" id="profile-form">
+        <label class="field"><span class="label">이름 (닉네임)</span>
+          <input type="text" name="name" maxlength="20" required></label>
+        <label class="field"><span class="label">태어난 해 <span class="hint">(만 19세 이상)</span></span>
+          <input type="number" name="birth_year" inputmode="numeric" required></label>
+        <div class="field"><span class="label">성별</span>
+          <div class="seg">
+            <label><input type="radio" name="gender" value="M" required><span>남성</span></label>
+            <label><input type="radio" name="gender" value="F"><span>여성</span></label>
+          </div>
+        </div>
+        <br>
+        <div class="field"><span class="label">만나고 싶은 사람</span>
+          <div class="seg">
+            <label><input type="radio" name="looking_for" value="M" required><span>남성</span></label>
+            <label><input type="radio" name="looking_for" value="F"><span>여성</span></label>
+            <label><input type="radio" name="looking_for" value="ALL"><span>모두</span></label>
+          </div>
+        </div>
+        <br>
+        <label class="field"><span class="label">지역</span>
+          <select name="region" required></select></label>
+        <div class="field"><span class="label">관심사 <span class="hint">(최대 5개)</span></span>
+          <div class="chips" id="interest-chips"></div>
+        </div>
+        <br>
+        <label class="field"><span class="label">자기소개 <span class="hint">(300자)</span></span>
+          <textarea name="bio" maxlength="300" placeholder="주말엔 주로 뭐 하세요? 어떤 사람을 만나고 싶나요?"></textarea></label>
+        <p class="error" id="setup-error"></p>
+        <button class="btn" type="submit">저장하기</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ───────── 메인 (탭) ───────── -->
+  <div class="wrap" id="main" hidden>
+    <section class="screen" id="tab-discover">
+      <div class="top">
+        <h1>설레임<span class="pill" id="demo-pill" hidden>데모</span></h1>
+        <button class="icon-btn" id="open-filter" type="button">⚙︎ 필터</button>
+      </div>
+      <div class="deck" id="deck"></div>
+      <div class="actions" id="actions">
+        <button class="round pass" id="btn-pass" type="button" aria-label="넘기기">✕</button>
+        <button class="round like" id="btn-like" type="button" aria-label="좋아요">♥</button>
+      </div>
+    </section>
+
+    <section class="screen" id="tab-chats" hidden>
+      <div class="top"><h1>매칭 · 채팅</h1></div>
+      <div class="scroll" id="match-list"></div>
+    </section>
+
+    <section class="screen" id="tab-me" hidden>
+      <div class="top"><h1>내 프로필</h1></div>
+      <div class="scroll">
+        <div class="me-card" id="me-card"></div>
+        <div class="stack">
+          <button class="btn" id="edit-profile" type="button">프로필 수정</button>
+          <button class="btn ghost" id="sign-out" type="button">로그아웃</button>
+        </div>
+      </div>
+    </section>
+
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="discover" aria-selected="true"><span class="ic">🔥</span>탐색</button>
+      <button role="tab" data-tab="chats" aria-selected="false"><span class="ic">💬</span>채팅<span class="dot" id="chat-dot" hidden></span></button>
+      <button role="tab" data-tab="me" aria-selected="false"><span class="ic">🙂</span>내 정보</button>
+    </nav>
+  </div>
+
+  <!-- ───────── 채팅방 ───────── -->
+  <div id="chat" hidden>
+    <div class="wrap">
+      <div class="chat-head">
+        <button class="back" id="chat-back" type="button" aria-label="뒤로">‹</button>
+        <div class="avatar" id="chat-avatar"></div>
+        <div><div class="who" id="chat-name"></div><div class="sub" id="chat-sub"></div></div>
+      </div>
+      <div class="msgs" id="msgs"></div>
+      <form class="composer" id="composer">
+        <input name="body" maxlength="1000" placeholder="메시지 보내기" autocomplete="off" enterkeyhint="send">
+        <button type="submit">전송</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ───────── 필터 ───────── -->
+  <dialog id="filter-dialog">
+    <form class="form" method="dialog" id="filter-form">
+      <h3>어떤 사람을 볼까요?</h3>
+      <div class="field"><span class="label">나이</span>
+        <div class="row">
+          <input type="number" name="min_age" min="19" max="99" inputmode="numeric">
+          <span style="align-self:center">~</span>
+          <input type="number" name="max_age" min="19" max="99" inputmode="numeric">
+        </div>
+      </div>
+      <br>
+      <label class="field"><span class="label">지역</span><select name="region"></select></label>
+      <label class="field"><span class="label">관심사</span><select name="interest"></select></label>
+      <div class="row">
+        <button class="btn ghost" value="reset" type="submit">초기화</button>
+        <button class="btn" value="apply" type="submit">적용</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- ───────── 매칭 성공 ───────── -->
+  <dialog id="match-dialog" class="match-dialog">
+    <div class="hearts">💞</div>
+    <h3>It's a Match!</h3>
+    <p id="match-text"></p>
+    <div class="pair" id="match-pair"></div>
+    <div class="stack">
+      <button class="btn" id="match-chat" type="button">메시지 보내기</button>
+      <button class="btn ghost" id="match-later" type="button">계속 둘러보기</button>
+    </div>
+  </dialog>
+
+  <script>
+    // ─────────────────────────────────────────────────────────────
+    // Supabase 설정 (README 참고). 비워두면 "데모 모드"로 내 브라우저 안에서만 동작합니다.
+    // ⚠️ anon / publishable 키만 넣으세요. service_role / secret 키는 절대 금지!
+    // ─────────────────────────────────────────────────────────────
+    window.DATING_CONFIG = {
+      SUPABASE_URL: "",
+      SUPABASE_KEY: "",
+    };
+  </script>
+
+  <script>
+    (() => {
+      const REGIONS = ["서울", "경기", "인천", "부산", "대구", "광주", "대전", "울산", "세종",
+        "강원", "충북", "충남", "전북", "전남", "경북", "경남", "제주"];
+      const INTERESTS = ["여행", "맛집", "카페", "운동", "등산", "러닝", "영화", "음악", "독서", "게임",
+        "요리", "사진", "반려동물", "공연", "드라이브", "패션", "와인", "전시회"];
+      const MAX_INTERESTS = 5;
+      const THIS_YEAR = new Date().getFullYear();
+      const DEFAULT_FILTERS = { min_age: 19, max_age: 45, region: "", interest: "" };
+
+      const { SUPABASE_URL, SUPABASE_KEY } = window.DATING_CONFIG || {};
+      const ONLINE = Boolean(SUPABASE_URL && SUPABASE_KEY);
+
+      // ───── 유틸 ─────
+      const $ = (sel, el = document) => el.querySelector(sel);
+      const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+      const age = (p) => THIS_YEAR - p.birth_year;
+      const initial = (p) => esc(Array.from(p.name || "?")[0]);
+      function gradient(id) {
+        let h = 0;
+        for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) % 360;
+        return `background:linear-gradient(135deg,hsl(${h} 78% 72%),hsl(${(h + 45) % 360} 70% 56%))`;
+      }
+      function timeLabel(iso) {
+        if (!iso) return "";
+        const d = new Date(iso);
+        const today = new Date().toDateString() === d.toDateString();
+        return today
+          ? d.toLocaleTimeString("ko-KR", { hour: "numeric", minute: "2-digit" })
+          : d.toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" });
+      }
+      const store = {
+        get(key, fallback) {
+          try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+          catch { return fallback; }
+        },
+        set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} },
+        del(key) { try { localStorage.removeItem(key); } catch {} },
+      };
+
+      // ───────────────────────────────────────────────
+      // 데이터 계층: Supabase(온라인) / 데모(로컬) 가 같은 함수를 제공
+      //   profile = { id, name, birth_year, gender, looking_for, region, interests[], bio }
+      //   match   = { id, at, other: profile, last: { body, at } | null }
+      //   message = { id, matchId, mine, body, at }
+      // ───────────────────────────────────────────────
+      function createOnlineApi() {
+        const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        let uid = null;
+        const check = ({ data, error }) => { if (error) throw error; return data; };
+        const toMessage = (r) => ({ id: r.id, matchId: r.match_id, mine: r.sender_id === uid, body: r.body, at: r.created_at });
+
+        return {
+          online: true,
+          async session() {
+            const { data } = await sb.auth.getSession();
+            uid = data.session?.user.id ?? null;
+            return Boolean(uid);
+          },
+          async signIn(email, password) {
+            const data = check(await sb.auth.signInWithPassword({ email, password }));
+            uid = data.user.id;
+          },
+          async signUp(email, password) {
+            const data = check(await sb.auth.signUp({ email, password }));
+            if (!data.session) throw new Error("인증 메일을 보냈어요. 메일의 링크를 누른 뒤 로그인해 주세요.");
+            uid = data.user.id;
+          },
+          async signOut() { await sb.auth.signOut(); uid = null; },
+          async myProfile() {
+            return check(await sb.from("profiles").select("*").eq("id", uid).maybeSingle());
+          },
+          async saveProfile(p) {
+            return check(await sb.from("profiles").upsert({ ...p, id: uid }).select().single());
+          },
+          async candidates(f) {
+            return check(await sb.rpc("get_candidates", {
+              min_age: f.min_age, max_age: f.max_age,
+              f_region: f.region || null, f_interest: f.interest || null,
+            }));
+          },
+          async swipe(targetId, like) {
+            const matchId = check(await sb.rpc("swipe", { target: targetId, is_like: like }));
+            return matchId ?? null;
+          },
+          async matches() {
+            const rows = check(await sb.rpc("my_matches"));
+            return rows.map((r) => ({
+              id: r.match_id,
+              at: r.matched_at,
+              other: {
+                id: r.other_id, name: r.other_name, birth_year: r.other_birth_year, gender: r.other_gender,
+                region: r.other_region, interests: r.other_interests, bio: r.other_bio,
+              },
+              last: r.last_body ? { body: r.last_body, at: r.last_at } : null,
+            }));
+          },
+          async messages(matchId) {
+            const rows = check(await sb.from("messages").select("*")
+              .eq("match_id", matchId).order("id", { ascending: false }).limit(200));
+            return rows.reverse().map(toMessage);
+          },
+          async send(matchId, body) {
+            return toMessage(check(await sb.from("messages").insert({ match_id: matchId, body }).select().single()));
+          },
+          subscribe({ onMessage, onMatch }) {
+            const channel = sb.channel("live")
+              .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" },
+                (payload) => onMessage(toMessage(payload.new)))
+              .on("postgres_changes", { event: "INSERT", schema: "public", table: "matches" },
+                () => onMatch())
+              .subscribe();
+            return () => sb.removeChannel(channel);
+          },
+        };
+      }
+
+      function createDemoApi() {
+        const KEY = "seollem-demo-v1";
+        const SEED = [
+          ["d1", "지은", 1997, "F", "M", "서울", ["카페", "전시회", "사진"], "주말엔 동네 카페 투어해요. 좋아하는 카페 공유해 주실 분!"],
+          ["d2", "민준", 1995, "M", "F", "서울", ["운동", "러닝", "맛집"], "한강 러닝 크루 활동 중이에요. 같이 뛰고 맛있는 거 먹어요 🏃"],
+          ["d3", "서연", 1999, "F", "M", "경기", ["영화", "독서", "음악"], "넷플릭스보다 극장파. 요즘 읽는 책 얘기하는 거 좋아해요."],
+          ["d4", "도윤", 1993, "M", "F", "부산", ["여행", "드라이브", "사진"], "바다 보면서 드라이브하는 게 최고의 힐링이라고 생각해요."],
+          ["d5", "하린", 1996, "F", "M", "인천", ["요리", "와인", "맛집"], "요리하는 거 좋아해요. 제 파스타 맛 보실 분?"],
+          ["d6", "준호", 1998, "M", "F", "대전", ["게임", "영화", "음악"], "롤 골드… 하지만 진지하게 대화할 줄도 알아요 ㅎㅎ"],
+          ["d7", "수아", 1994, "F", "M", "서울", ["공연", "음악", "패션"], "뮤지컬 덕후입니다. 공연 같이 보러 다닐 사람 구해요!"],
+          ["d8", "현우", 1996, "M", "F", "경기", ["등산", "운동", "여행"], "주말마다 산에 가요. 정상에서 먹는 컵라면이 진리."],
+          ["d9", "유나", 2000, "F", "M", "대구", ["반려동물", "카페", "사진"], "고양이 두 마리 집사예요 🐈 사진 많이 보여드릴게요."],
+          ["d10", "지호", 1992, "M", "F", "서울", ["와인", "요리", "독서"], "조용한 와인바에서 오래 이야기 나누는 걸 좋아합니다."],
+          ["d11", "예린", 1995, "F", "ALL", "광주", ["여행", "맛집", "드라이브"], "1년에 한 번은 꼭 해외여행! 다음 여행지 추천 받아요."],
+          ["d12", "태윤", 1997, "M", "ALL", "서울", ["전시회", "패션", "카페"], "전시 보고 근처 카페에서 감상 나누는 데이트 좋아해요."],
+          ["d13", "다은", 1998, "F", "F", "서울", ["음악", "공연", "러닝"], "페스티벌 가는 게 낙이에요. 올해 라인업 얘기해요!"],
+          ["d14", "시우", 1994, "M", "M", "경기", ["운동", "요리", "영화"], "운동 끝나고 건강하게 요리해 먹는 루틴러."],
+          ["d15", "채원", 1993, "F", "M", "제주", ["여행", "사진", "등산"], "제주 살아요. 오름 같이 오를 사람 🌿"],
+          ["d16", "건우", 1999, "M", "F", "울산", ["게임", "맛집", "반려동물"], "강아지 산책 메이트 구합니다 (강아지가 사람을 좋아해요)"],
+        ];
+        const PROFILES = SEED.map(([id, name, birth_year, gender, looking_for, region, interests, bio], i) =>
+          ({ id, name, birth_year, gender, looking_for, region, interests, bio, likesYou: i % 3 !== 2 }));
+        const REPLIES = ["안녕하세요! 반가워요 😊", "ㅎㅎ 프로필 보고 궁금했어요", "오 저도 그거 좋아해요!",
+          "주말엔 보통 뭐 하세요?", "좋아요 ㅎㅎ 언제 시간 괜찮으세요?", "맞아요 완전 공감해요", "그럼 다음에 같이 가요!"];
+
+        let db = store.get(KEY, null) || { me: null, swipes: {}, matches: [], messages: {} };
+        const save = () => store.set(KEY, db);
+        const byId = (id) => PROFILES.find((p) => p.id === id);
+        let listeners = null;
+
+        const toMatch = (m) => {
+          const msgs = db.messages[m.id] || [];
+          const last = msgs[msgs.length - 1];
+          return { id: m.id, at: m.at, other: byId(m.otherId), last: last ? { body: last.body, at: last.at } : null };
+        };
+
+        return {
+          online: false,
+          async session() { return true; },
+          async signOut() { store.del(KEY); db = { me: null, swipes: {}, matches: [], messages: {} }; },
+          async myProfile() { return db.me; },
+          async saveProfile(p) { db.me = { ...p, id: "me" }; save(); return db.me; },
+          async candidates(f) {
+            const me = db.me;
+            return PROFILES.filter((p) =>
+              !(p.id in db.swipes)
+              && (me.looking_for === "ALL" || p.gender === me.looking_for)
+              && (p.looking_for === "ALL" || p.looking_for === me.gender)
+              && age(p) >= f.min_age && age(p) <= f.max_age
+              && (!f.region || p.region === f.region)
+              && (!f.interest || p.interests.includes(f.interest))
+            ).sort(() => Math.random() - 0.5);
+          },
+          async swipe(targetId, like) {
+            db.swipes[targetId] = like;
+            let matchId = null;
+            if (like && byId(targetId)?.likesYou) {
+              matchId = "m-" + targetId;
+              if (!db.matches.some((m) => m.id === matchId)) {
+                db.matches.push({ id: matchId, otherId: targetId, at: new Date().toISOString() });
+              }
+            }
+            save();
+            return matchId;
+          },
+          async matches() {
+            return db.matches.map(toMatch)
+              .sort((a, b) => (b.last?.at || b.at).localeCompare(a.last?.at || a.at));
+          },
+          async messages(matchId) { return db.messages[matchId] || []; },
+          async send(matchId, body) {
+            const add = (mine, text) => {
+              const msg = { id: Date.now() + Math.random(), matchId, mine, body: text, at: new Date().toISOString() };
+              (db.messages[matchId] ||= []).push(msg);
+              save();
+              return msg;
+            };
+            const msg = add(true, body);
+            // 데모: 상대가 잠시 뒤 답장
+            setTimeout(() => {
+              const reply = add(false, REPLIES[Math.floor(Math.random() * REPLIES.length)]);
+              listeners?.onMessage(reply);
+            }, 1200 + Math.random() * 1500);
+            return msg;
+          },
+          subscribe(l) { listeners = l; return () => { listeners = null; }; },
+        };
+      }
+
+      function loadScript(src) {
+        return new Promise((resolve, reject) => {
+          const s = document.createElement("script");
+          s.src = src; s.onload = resolve; s.onerror = () => reject(new Error("스크립트를 불러오지 못했어요: " + src));
+          document.head.appendChild(s);
+        });
+      }
+
+      // ───────────────────────────────────────────────
+      // 화면
+      // ───────────────────────────────────────────────
+      let api;
+      const state = {
+        me: null,
+        filters: { ...DEFAULT_FILTERS, ...store.get("seollem-filters", {}) },
+        deck: [],
+        busy: false,
+        matches: [],
+        openMatch: null,
+        unread: new Set(store.get("seollem-unread", [])),
+        unsubscribe: null,
+      };
+      const saveUnread = () => store.set("seollem-unread", [...state.unread]);
+
+      function show(id) {
+        for (const s of ["auth", "setup", "main"]) $("#" + s).hidden = s !== id;
+      }
+
+      // 셀렉트/칩 채우기
+      function fillSelect(select, items, emptyLabel) {
+        select.innerHTML = (emptyLabel != null ? `<option value="">${esc(emptyLabel)}</option>` : "")
+          + items.map((v) => `<option value="${esc(v)}">${esc(v)}</option>`).join("");
+      }
+      fillSelect($("#profile-form").elements.region, REGIONS);
+      fillSelect($("#filter-form").elements.region, REGIONS, "전체");
+      fillSelect($("#filter-form").elements.interest, INTERESTS, "전체");
+      $("#interest-chips").innerHTML = INTERESTS
+        .map((v) => `<button type="button" class="chip" aria-pressed="false" data-v="${esc(v)}">${esc(v)}</button>`).join("");
+      $("#interest-chips").addEventListener("click", (e) => {
+        const chip = e.target.closest(".chip");
+        if (!chip) return;
+        const on = chip.getAttribute("aria-pressed") === "true";
+        const count = $("#interest-chips").querySelectorAll("[aria-pressed=true]").length;
+        if (!on && count >= MAX_INTERESTS) return;
+        chip.setAttribute("aria-pressed", String(!on));
+      });
+
+      function cardHTML(p, extraClass = "") {
+        return `
+          <div class="card ${extraClass}" data-id="${esc(p.id)}">
+            <div class="photo" style="${gradient(p.id)}">${initial(p)}</div>
+            <div class="info">
+              <p class="name">${esc(p.name)}<small>${age(p)}</small></p>
+              <p class="meta">📍 ${esc(p.region)}</p>
+              <div class="tags">${(p.interests || []).map((t) => `<span class="tag">${esc(t)}</span>`).join("")}</div>
+              ${p.bio ? `<p class="bio">${esc(p.bio)}</p>` : ""}
+            </div>
+            <div class="stamp like">LIKE</div>
+            <div class="stamp nope">NOPE</div>
+          </div>`;
+      }
+      function avatarHTML(p) {
+        return `<div class="avatar" style="${gradient(p.id)}">${initial(p)}</div>`;
+      }
+
+      // ───── 로그인 ─────
+      $("#auth-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const mode = e.submitter?.dataset.mode || "signin";
+        const form = e.target;
+        const buttons = form.querySelectorAll("button");
+        $("#auth-error").textContent = "";
+        buttons.forEach((b) => (b.disabled = true));
+        try {
+          const email = form.elements.email.value.trim();
+          const password = form.elements.password.value;
+          if (mode === "signup") await api.signUp(email, password);
+          else await api.signIn(email, password);
+          await enter();
+        } catch (err) {
+          const msg = String(err.message || err);
+          $("#auth-error").textContent = /Invalid login/i.test(msg) ? "이메일 또는 비밀번호가 맞지 않아요."
+            : /already registered/i.test(msg) ? "이미 가입된 이메일이에요. 로그인해 주세요." : msg;
+        } finally {
+          buttons.forEach((b) => (b.disabled = false));
+        }
+      });
+
+      // ───── 프로필 작성/수정 ─────
+      function openSetup(editing) {
+        const form = $("#profile-form");
+        const p = state.me || { name: "", birth_year: "", gender: "", looking_for: "", region: "서울", interests: [], bio: "" };
+        form.elements.name.value = p.name;
+        form.elements.birth_year.value = p.birth_year;
+        form.elements.birth_year.min = 1940;
+        form.elements.birth_year.max = THIS_YEAR - 19;
+        form.elements.gender.value = p.gender;
+        form.elements.looking_for.value = p.looking_for;
+        form.elements.region.value = p.region;
+        form.elements.bio.value = p.bio || "";
+        for (const chip of $("#interest-chips").children) {
+          chip.setAttribute("aria-pressed", String(p.interests.includes(chip.dataset.v)));
+        }
+        $("#setup-title").textContent = editing ? "프로필 수정" : "프로필 만들기";
+        $("#setup-cancel").hidden = !editing;
+        $("#setup-error").textContent = "";
+        show("setup");
+      }
+      $("#setup-cancel").addEventListener("click", () => show("main"));
+      $("#profile-form").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const form = e.target;
+        const interests = [...$("#interest-chips").querySelectorAll("[aria-pressed=true]")].map((c) => c.dataset.v);
+        if (interests.length === 0) { $("#setup-error").textContent = "관심사를 하나 이상 골라주세요."; return; }
+        const profile = {
+          name: form.elements.name.value.trim(),
+          birth_year: Number(form.elements.birth_year.value),
+          gender: form.elements.gender.value,
+          looking_for: form.elements.looking_for.value,
+          region: form.elements.region.value,
+          interests,
+          bio: form.elements.bio.value.trim(),
+        };
+        const submit = form.querySelector("[type=submit]");
+        submit.disabled = true;
+        try {
+          const first = !state.me;
+          state.me = await api.saveProfile(profile);
+          if (first) await startMain();
+          else { show("main"); renderMe(); loadDeck(); }
+        } catch (err) {
+          $("#setup-error").textContent = "저장하지 못했어요: " + (err.message || err);
+        } finally {
+          submit.disabled = false;
+        }
+      });
+
+      // ───── 탭 ─────
+      function selectTab(name) {
+        for (const b of document.querySelectorAll(".tabs button")) {
+          b.setAttribute("aria-selected", String(b.dataset.tab === name));
+        }
+        for (const t of ["discover", "chats", "me"]) $("#tab-" + t).hidden = t !== name;
+        if (name === "chats") refreshMatches();
+        if (name === "me") renderMe();
+      }
+      document.querySelector(".tabs").addEventListener("click", (e) => {
+        const b = e.target.closest("button[data-tab]");
+        if (b) selectTab(b.dataset.tab);
+      });
+
+      // ───── 탐색 (카드 스와이프) ─────
+      async function loadDeck() {
+        try {
+          state.deck = await api.candidates(state.filters);
+        } catch (err) {
+          state.deck = [];
+          console.error(err);
+        }
+        renderDeck();
+      }
+
+      function renderDeck() {
+        const deck = $("#deck");
+        const top = state.deck[0];
+        $("#actions").hidden = !top;
+        if (!top) {
+          deck.innerHTML = `
+            <div class="empty">
+              <div class="big">🌙</div>
+              <div>조건에 맞는 사람을 모두 봤어요.<br>필터를 넓히거나 나중에 다시 와주세요.</div>
+              <button class="btn" type="button" data-action="filter">필터 바꾸기</button>
+            </div>`;
+          return;
+        }
+        deck.innerHTML = (state.deck[1] ? cardHTML(state.deck[1], "under") : "") + cardHTML(top, "top");
+        bindDrag(deck.querySelector(".card.top"));
+      }
+      $("#deck").addEventListener("click", (e) => {
+        if (e.target.closest("[data-action=filter]")) openFilter();
+      });
+
+      function bindDrag(card) {
+        let startX = 0, startY = 0, dx = 0, dragging = false;
+        card.addEventListener("pointerdown", (e) => {
+          if (state.busy) return;
+          dragging = true; dx = 0;
+          startX = e.clientX; startY = e.clientY;
+          card.setPointerCapture(e.pointerId);
+          card.style.transition = "none";
+        });
+        card.addEventListener("pointermove", (e) => {
+          if (!dragging) return;
+          dx = e.clientX - startX;
+          const dy = (e.clientY - startY) * 0.3;
+          card.style.transform = `translate(${dx}px, ${dy}px) rotate(${dx / 18}deg)`;
+          card.style.setProperty("--like", Math.max(0, Math.min(1, dx / 100)));
+          card.style.setProperty("--nope", Math.max(0, Math.min(1, -dx / 100)));
+        });
+        const end = () => {
+          if (!dragging) return;
+          dragging = false;
+          card.style.transition = "";
+          if (Math.abs(dx) > 100) {
+            swipe(dx > 0);
+          } else {
+            card.style.transform = "";
+            card.style.setProperty("--like", 0);
+            card.style.setProperty("--nope", 0);
+          }
+        };
+        card.addEventListener("pointerup", end);
+        card.addEventListener("pointercancel", end);
+      }
+
+      async function swipe(like) {
+        const card = $("#deck .card.top");
+        const person = state.deck[0];
+        if (!card || !person || state.busy) return;
+        state.busy = true;
+
+        card.style.setProperty(like ? "--like" : "--nope", 1);
+        card.style.transform = `translate(${like ? 140 : -140}vw, 40px) rotate(${like ? 30 : -30}deg)`;
+        card.style.opacity = "0";
+        const under = $("#deck .card.under");
+        if (under) under.classList.remove("under");
+
+        let matchId = null;
+        try {
+          [matchId] = await Promise.all([api.swipe(person.id, like), new Promise((r) => setTimeout(r, 280))]);
+        } catch (err) {
+          console.error(err);
+          alert("저장하지 못했어요. 잠시 후 다시 시도해 주세요.");
+        }
+        state.deck.shift();
+        if (state.deck.length === 0) await loadDeck();
+        else renderDeck();
+        state.busy = false;
+
+        if (matchId) {
+          state.unread.add(String(matchId));
+          saveUnread();
+          updateDot();
+          showMatch(person, matchId);
+        }
+      }
+      $("#btn-like").addEventListener("click", () => swipe(true));
+      $("#btn-pass").addEventListener("click", () => swipe(false));
+      document.addEventListener("keydown", (e) => {
+        if ($("#main").hidden || $("#tab-discover").hidden || !$("#chat").hidden
+          || document.querySelector("dialog[open]") || e.target.closest("input, textarea, select")) return;
+        if (e.key === "ArrowRight") swipe(true);
+        if (e.key === "ArrowLeft") swipe(false);
+      });
+
+      // ───── 필터 ─────
+      function openFilter() {
+        const f = $("#filter-form");
+        f.elements.min_age.value = state.filters.min_age;
+        f.elements.max_age.value = state.filters.max_age;
+        f.elements.region.value = state.filters.region;
+        f.elements.interest.value = state.filters.interest;
+        $("#filter-dialog").showModal();
+      }
+      $("#open-filter").addEventListener("click", openFilter);
+      $("#filter-dialog").addEventListener("close", () => {
+        const choice = $("#filter-dialog").returnValue;
+        if (choice === "reset") {
+          state.filters = { ...DEFAULT_FILTERS };
+        } else if (choice === "apply") {
+          const f = $("#filter-form");
+          let min = Math.max(19, Number(f.elements.min_age.value) || 19);
+          let max = Math.min(99, Number(f.elements.max_age.value) || 99);
+          if (min > max) [min, max] = [max, min];
+          state.filters = { min_age: min, max_age: max, region: f.elements.region.value, interest: f.elements.interest.value };
+        } else {
+          return;
+        }
+        $("#filter-dialog").returnValue = "";
+        store.set("seollem-filters", state.filters);
+        loadDeck();
+      });
+
+      // ───── 매칭 성공 팝업 ─────
+      let pendingChat = null;
+      function showMatch(person, matchId) {
+        pendingChat = matchId;
+        $("#match-text").textContent = `${person.name}님도 회원님을 좋아해요!`;
+        $("#match-pair").innerHTML = avatarHTML(state.me) + avatarHTML(person);
+        $("#match-dialog").showModal();
+      }
+      $("#match-later").addEventListener("click", () => $("#match-dialog").close());
+      $("#match-chat").addEventListener("click", async () => {
+        $("#match-dialog").close();
+        await refreshMatches();
+        const m = state.matches.find((x) => String(x.id) === String(pendingChat));
+        if (m) openChat(m);
+      });
+
+      // ───── 매칭 · 채팅 목록 ─────
+      let refreshing = null;
+      function refreshMatches() {
+        // 동시에 여러 번 불려도 한 번만 요청
+        refreshing ||= api.matches()
+          .then((list) => { state.matches = list; renderMatches(); })
+          .catch((err) => console.error(err))
+          .finally(() => { refreshing = null; });
+        return refreshing;
+      }
+
+      function renderMatches() {
+        const fresh = state.matches.filter((m) => !m.last);
+        const talks = state.matches.filter((m) => m.last);
+        const el = $("#match-list");
+        if (state.matches.length === 0) {
+          el.innerHTML = `<div class="empty" style="min-height:60vh"><div class="big">💌</div>
+            <div>아직 매칭이 없어요.<br>탐색 탭에서 마음에 드는 사람에게 ♥를 눌러보세요.</div></div>`;
+          return;
+        }
+        el.innerHTML = `
+          ${fresh.length ? `<div class="section-title">새로운 매칭 ${fresh.length}</div>
+            <div class="new-matches">${fresh.map((m) => `
+              <button type="button" data-match="${esc(m.id)}">${avatarHTML(m.other)}${esc(m.other.name)}</button>`).join("")}
+            </div>` : ""}
+          ${talks.length ? `<div class="section-title">대화</div>
+            ${talks.map((m) => `
+              <button type="button" class="convo ${state.unread.has(String(m.id)) ? "unread" : ""}" data-match="${esc(m.id)}">
+                ${avatarHTML(m.other)}
+                <div class="txt"><div class="who">${esc(m.other.name)}</div><div class="last">${esc(m.last.body)}</div></div>
+                <div class="when">${timeLabel(m.last.at)}</div>
+              </button>`).join("")}` : ""}`;
+      }
+      $("#match-list").addEventListener("click", (e) => {
+        const b = e.target.closest("[data-match]");
+        if (!b) return;
+        const m = state.matches.find((x) => String(x.id) === b.dataset.match);
+        if (m) openChat(m);
+      });
+
+      function updateDot() { $("#chat-dot").hidden = state.unread.size === 0; }
+
+      // ───── 채팅방 ─────
+      async function openChat(match) {
+        state.openMatch = match;
+        state.unread.delete(String(match.id));
+        saveUnread();
+        updateDot();
+        const o = match.other;
+        $("#chat-avatar").outerHTML = `<div class="avatar" id="chat-avatar" style="${gradient(o.id)}">${initial(o)}</div>`;
+        $("#chat-name").textContent = o.name;
+        $("#chat-sub").textContent = `${age(o)}세 · ${o.region} · ${(o.interests || []).join(", ")}`;
+        $("#msgs").innerHTML = "";
+        $("#chat").hidden = false;
+        try {
+          const list = await api.messages(match.id);
+          if (state.openMatch !== match) return;
+          $("#msgs").innerHTML = "";
+          if (list.length === 0) {
+            $("#msgs").innerHTML = `<div class="chat-hello">${esc(o.name)}님과 매칭됐어요 💞<br>먼저 인사를 건네보세요!</div>`;
+          }
+          list.forEach(appendMessage);
+        } catch (err) {
+          $("#msgs").innerHTML = `<div class="chat-hello">메시지를 불러오지 못했어요.</div>`;
+        }
+        $("#composer").elements.body.focus();
+      }
+
+      function appendMessage(msg) {
+        const box = $("#msgs");
+        if (box.querySelector(`[data-id="${CSS.escape(String(msg.id))}"]`)) return; // 중복 방지
+        box.querySelector(".chat-hello")?.remove();
+        const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+        const side = msg.mine ? "mine" : "other";
+        box.insertAdjacentHTML("beforeend",
+          `<div class="msg ${side}" data-id="${esc(msg.id)}">${esc(msg.body)}</div>
+           <div class="msg-time ${side}">${timeLabel(msg.at)}</div>`);
+        if (nearBottom || msg.mine) box.scrollTop = box.scrollHeight;
+      }
+
+      $("#chat-back").addEventListener("click", () => {
+        state.openMatch = null;
+        $("#chat").hidden = true;
+        refreshMatches();
+      });
+
+      $("#composer").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const input = e.target.elements.body;
+        const body = input.value.trim();
+        const match = state.openMatch;
+        if (!body || !match) return;
+        input.value = "";
+        try {
+          const msg = await api.send(match.id, body);
+          if (state.openMatch === match) appendMessage(msg);
+        } catch (err) {
+          input.value = body;
+          alert("전송하지 못했어요: " + (err.message || err));
+        }
+      });
+
+      function onMessage(msg) {
+        if (state.openMatch && String(state.openMatch.id) === String(msg.matchId)) {
+          appendMessage(msg);
+        } else if (!msg.mine) {
+          state.unread.add(String(msg.matchId));
+          saveUnread();
+          updateDot();
+        }
+        refreshMatches();
+      }
+      function onMatch() {
+        // 상대가 나중에 좋아요를 눌러 매칭된 경우 (실시간 알림)
+        const before = new Set(state.matches.map((m) => String(m.id)));
+        refreshMatches().then(() => {
+          for (const m of state.matches) {
+            if (!before.has(String(m.id))) state.unread.add(String(m.id));
+          }
+          saveUnread();
+          updateDot();
+        });
+      }
+
+      // ───── 내 프로필 ─────
+      function renderMe() {
+        if (!state.me) return;
+        $("#me-card").innerHTML = cardHTML(state.me);
+        $("#sign-out").textContent = api.online ? "로그아웃" : "데모 초기화";
+      }
+      $("#edit-profile").addEventListener("click", () => openSetup(true));
+      $("#sign-out").addEventListener("click", async () => {
+        if (!api.online && !confirm("데모 데이터(프로필, 매칭, 채팅)를 모두 지울까요?")) return;
+        state.unsubscribe?.();
+        await api.signOut();
+        store.del("seollem-unread");
+        location.reload();
+      });
+
+      // ───── 시작 ─────
+      async function startMain() {
+        show("main");
+        $("#demo-pill").hidden = api.online;
+        selectTab("discover");
+        updateDot();
+        state.unsubscribe?.();
+        state.unsubscribe = api.subscribe({ onMessage, onMatch });
+        await Promise.all([loadDeck(), refreshMatches()]);
+      }
+
+      async function enter() {
+        state.me = await api.myProfile();
+        if (state.me) await startMain();
+        else openSetup(false);
+      }
+
+      async function boot() {
+        if (ONLINE) {
+          try {
+            await loadScript("https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2");
+            api = createOnlineApi();
+          } catch (err) {
+            alert("서버에 연결하지 못해 데모 모드로 실행합니다.");
+            api = createDemoApi();
+          }
+        } else {
+          api = createDemoApi();
+        }
+        if (await api.session()) await enter();
+        else show("auth");
+      }
+      boot().catch((err) => {
+        console.error(err);
+        document.body.innerHTML = `<p style="padding:24px">앱을 시작하지 못했어요: ${esc(err.message || err)}</p>`;
+      });
+    })();
+  </script>
+</body>
+</html>
