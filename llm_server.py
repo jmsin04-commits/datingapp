@@ -12,6 +12,7 @@
 """
 
 import argparse
+import ipaddress
 import re
 import sys
 import threading
@@ -64,7 +65,12 @@ PROFILE = """
 [대화 상대]
 - 이름: {me_name}님 / {me_age}살 / {me_gender} / {me_region} 거주
 - 관심사: {me_interests}
-- {relation}"""
+- {relation}
+
+[꼭 지킬 것]
+- 자기 자신은 '저'라고 말한다. '{name}'처럼 자기 이름을 3인칭으로 쓰지 않는다.
+- 상대는 반드시 '{me_name}님'이라고 부른다. 다른 이름으로 부르지 않는다.
+- 반말(너, ~할래?, ~해?)은 쓰지 않고 항상 존댓말을 쓴다."""
 
 app = Flask(__name__)
 llm_lock = threading.Lock()  # CPU 하나로 생성하므로 요청은 순서대로 처리
@@ -77,6 +83,18 @@ def allowed(origin: str | None) -> bool:
     # 이 서버가 보낸 앱 화면(같은 주소)에서 온 요청은 허용 (--lan 으로 폰에서 열었을 때)
     same_origin = origin == f"{request.scheme}://{request.host}"
     return same_origin or origin in ALLOWED_ORIGINS or bool(LOCAL_ORIGIN.match(origin))
+
+
+@app.before_request
+def same_network_only():
+    """--lan 이어도 같은 네트워크(사설 IP: 192.168.x.x, 10.x.x.x 등)에서 온 접속만 받음."""
+    try:
+        ip = ipaddress.ip_address(request.remote_addr or "")
+    except ValueError:
+        return jsonify(error="접속할 수 없어요."), 403
+    if not (ip.is_private or ip.is_loopback):
+        return jsonify(error="같은 와이파이에서만 접속할 수 있어요."), 403
+    return None
 
 
 @app.after_request
@@ -154,15 +172,36 @@ def keep(sentence: str) -> bool:
         and not LATIN_WORDS.search(MBTI.sub("", sentence))
 
 
+BANMAL = re.compile(r"(^|\s)너(는|도|랑|를|의|한테)?(\s|$)|(할래|했어|해|있어|좋아|어때|뭐야)\?|(했어|할게|좋아|그래|있어)[.!~]?$")
+
+
+def fix_names(sentence: str, persona_name: str, me_name: str) -> str:
+    """'예나도' → '저도', 상대를 '예나님'처럼 잘못 부르면 → '민수님'."""
+    if persona_name:
+        sentence = re.sub(rf"{re.escape(persona_name)}님", f"{me_name}님" if me_name else "", sentence)
+        for josa, me in (("는", "저는"), ("도", "저도"), ("가", "제가"), ("이가", "제가"), ("이는", "저는"), ("이도", "저도"), ("이", "제가")):
+            sentence = re.sub(rf"(^|\s){re.escape(persona_name)}{josa}(?=\s)", rf"\1{me}", sentence)
+    return sentence
+
+
+def polish(sentence: str, persona_name: str, me_name: str) -> str | None:
+    """한 문장을 다듬고, 쓰면 안 되는 문장이면 None."""
+    sentence = fix_names(sentence.strip(), persona_name, me_name)
+    if not keep(sentence) or BANMAL.search(sentence):
+        return None
+    return sentence
+
+
 def strip_name(reply: str, persona_name: str) -> str:
     reply = reply.lstrip().lstrip('"“”')
     return re.sub(rf"^\s*{re.escape(persona_name)}\s*[:：]\s*", "", reply)
 
 
-def clean(reply: str, persona_name: str) -> str:
-    """작은 모델이 가끔 섞는 이름표·따옴표·한자·영어 문장을 걸러낸다."""
+def clean(reply: str, persona_name: str, me_name: str = "") -> str:
+    """작은 모델이 가끔 섞는 이름표·따옴표·한자·영어·반말 문장을 걸러낸다."""
     reply = strip_name(reply.strip().strip('"“”'), persona_name)
-    reply = " ".join(s for s in SENTENCE_END.split(reply) if keep(s)).strip()
+    kept = (polish(s, persona_name, me_name) for s in SENTENCE_END.split(reply))
+    reply = " ".join(s for s in kept if s).strip()
     if len(reply) > MAX_CHARS:  # 너무 길면 문장 단위로 자름
         cut = reply[:MAX_CHARS]
         reply = cut[: max(cut.rfind(c) for c in ".!?~") + 1] or cut
@@ -187,25 +226,26 @@ def reply():
     if len(messages) < 2:
         return jsonify(error="보낸 메시지가 없어요."), 400
     persona_name = text((body.get("persona") or {}).get("name"), 20)
+    me_name = text((body.get("me") or {}).get("name"), 20)
     if body.get("stream"):
-        return Response(stream_reply(messages, persona_name), mimetype="application/x-ndjson")
+        return Response(stream_reply(messages, persona_name, me_name), mimetype="application/x-ndjson")
 
     with llm_lock:
         for _ in range(2):  # 걸러낸 뒤 남는 게 없으면 한 번 더 시도
             try:
                 out = state["llm"].create_chat_completion(
-                    messages=messages, temperature=0.6, top_p=0.9, repeat_penalty=1.1, max_tokens=60
+                    messages=messages, temperature=0.5, top_p=0.9, repeat_penalty=1.1, max_tokens=60
                 )
             except ValueError:  # 대화가 길어 문맥 창을 넘으면 최근 3개만 남기고 다시
                 messages = [messages[0], *messages[-3:]]
                 continue
-            answer = clean(out["choices"][0]["message"]["content"], persona_name)
+            answer = clean(out["choices"][0]["message"]["content"], persona_name, me_name)
             if answer:
                 return jsonify(reply=answer)
     return jsonify(error="답장을 만들지 못했어요."), 502
 
 
-def stream_reply(messages: list, persona_name: str):
+def stream_reply(messages: list, persona_name: str, me_name: str = ""):
     """문장이 하나 완성될 때마다 바로 보낸다 → 첫 문장이 1~3초 안에 화면에 뜸."""
     def line(**data):
         return json.dumps(data, ensure_ascii=False) + "\n"
@@ -216,7 +256,7 @@ def stream_reply(messages: list, persona_name: str):
             buf = ""
             try:
                 chunks = state["llm"].create_chat_completion(
-                    messages=messages, stream=True, temperature=0.6, top_p=0.9, repeat_penalty=1.1, max_tokens=60
+                    messages=messages, stream=True, temperature=0.5, top_p=0.9, repeat_penalty=1.1, max_tokens=60
                 )
                 for chunk in chunks:
                     buf += chunk["choices"][0]["delta"].get("content", "")
@@ -224,13 +264,15 @@ def stream_reply(messages: list, persona_name: str):
                         buf = strip_name(buf, persona_name)
                     *done, buf = SENTENCE_END.split(buf)  # 마지막 조각은 아직 끝나지 않은 문장
                     for sentence in done:
-                        if keep(sentence) and len(sent) + len(sentence) <= MAX_CHARS:
-                            sent = f"{sent} {sentence.strip()}".strip()
+                        sentence = polish(sentence, persona_name, me_name)
+                        if sentence and len(sent) + len(sentence) <= MAX_CHARS:
+                            sent = f"{sent} {sentence}".strip()
                             yield line(text=sent)
                     if len(sent) >= MAX_CHARS:
                         break
-                if keep(buf) and len(sent) + len(buf) <= MAX_CHARS:
-                    sent = f"{sent} {buf.strip()}".strip()
+                last = polish(buf, persona_name, me_name)
+                if last and len(sent) + len(last) <= MAX_CHARS:
+                    sent = f"{sent} {last}".strip()
                     yield line(text=sent)
             except ValueError:  # 대화가 길어 문맥 창을 넘으면 최근 3개만 남기고 다시
                 messages = [messages[0], *messages[-3:]]

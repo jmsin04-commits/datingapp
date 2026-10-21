@@ -100,15 +100,18 @@ PC와 폰이 **같은 와이파이**라면, LLM 서버가 앱 화면까지 보�
 2. Windows 설정 (처음 한 번):
    - VS Code 설정(`Ctrl+,`)에서 **Remote: Local Port Host** → `allInterfaces`
      (Dev Container의 포트를 Windows의 모든 네트워크에 연결. 바꾼 뒤 VS Code 창 다시 열기)
-   - **관리자 PowerShell**에서 방화벽 허용 (집·학교 등 '개인' 네트워크에서만):
+   - **관리자 PowerShell**에서 방화벽 허용 — **같은 와이파이(같은 서브넷)의 기기만**, '개인' 네트워크에서만:
      ```powershell
-     New-NetFirewallRule -DisplayName "datingapp LLM" -Direction Inbound -Protocol TCP -LocalPort 7861 -Action Allow -Profile Private
+     New-NetFirewallRule -DisplayName "datingapp LLM" -Direction Inbound -Protocol TCP -LocalPort 7861 -Action Allow -Profile Private -RemoteAddress LocalSubnet
      ```
+     (이미 예전 명령으로 만들었다면: `Set-NetFirewallRule -DisplayName "datingapp LLM" -RemoteAddress LocalSubnet`)
    - 와이파이가 '공용 네트워크'로 되어 있으면 Windows 설정 → 네트워크 → 해당 와이파이 → **개인 네트워크**로 변경
 3. PowerShell에서 `ipconfig` → Wi-Fi의 **IPv4 주소** 확인 (예: `192.168.0.12`)
 4. 폰 브라우저에서 `http://192.168.0.12:7861` → 제목 옆에 `데모 · AI 대화`가 뜨면 성공
 
-- 같은 와이파이의 다른 사람도 이 주소로 접속할 수 있으니, 다 쓰면 서버를 끄세요 (Ctrl+C).
+- 접속 제한: Windows 방화벽이 **같은 와이파이의 기기만** 통과시키고, 서버도 사설 IP(192.168.x.x 등)가 아닌 접속은 거부합니다.
+  공유기에서 포트포워딩을 하지 않는 한 바깥 인터넷에서는 들어올 수 없습니다.
+- 같은 와이파이의 다른 사람은 접속할 수 있으니, 다 쓰면 서버를 끄세요 (Ctrl+C).
   필요 없으면 방화벽 규칙은 `Remove-NetFirewallRule -DisplayName "datingapp LLM"` 으로 지웁니다.
 - 서버는 앱 화면(`index.html`)과 LLM 요청만 받고, 다른 파일은 보내지 않습니다.
 - 답장은 문장 단위로 바로바로 보여줍니다: 첫 문장 약 2~4초, 전체 4~8초. 남은 문장을 쓰는 동안 "입력 중…"이 표시됩니다.
