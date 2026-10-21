@@ -526,6 +526,8 @@
     window.DATING_CONFIG = {
       SUPABASE_URL: "",
       SUPABASE_KEY: "",
+      // 데모 채팅 상대를 내 PC의 로컬 LLM이 대답하게 하기 (llm_server.py 실행 시). 끄려면 ""
+      LLM_URL: "http://localhost:7861",
     };
   </script>
 
@@ -541,7 +543,7 @@
       const MIN_AGE = 19, MAX_AGE = 35; // 가입·검색 가능한 나이
       const DEFAULT_FILTERS = { min_age: MIN_AGE, max_age: MAX_AGE, region: "", interests: [] };
 
-      const { SUPABASE_URL, SUPABASE_KEY } = window.DATING_CONFIG || {};
+      const { SUPABASE_URL, SUPABASE_KEY, LLM_URL = "" } = window.DATING_CONFIG || {};
       const ONLINE = Boolean(SUPABASE_URL && SUPABASE_KEY);
 
       // ───── 유틸 ─────
@@ -942,6 +944,39 @@
           return { id: m.id, at: m.at, other: byId(m.otherId), last: last ? { body: last.body, at: last.at } : null };
         };
 
+        // ───── 로컬 LLM 연결 (llm_server.py) ─────
+        const llm = { ok: false, checkedAt: 0 };
+        async function checkLlm() {
+          if (!LLM_URL) return false;
+          llm.checkedAt = Date.now();
+          try {
+            const res = await fetch(LLM_URL.replace(/\/+$/, "") + "/health", { signal: AbortSignal.timeout(1500) });
+            llm.ok = res.ok;
+          } catch {
+            llm.ok = false;
+          }
+          return llm.ok;
+        }
+        async function llmReply(other, history) {
+          // 꺼져 있던 서버는 1분마다 다시 확인
+          if (!llm.ok && !(LLM_URL && Date.now() - llm.checkedAt > 60000 && await checkLlm())) return null;
+          const person = (x) => ({ name: x.name, age: age(x), gender: x.gender, region: x.region, interests: x.interests, job: x.job, bio: x.bio });
+          try {
+            const res = await fetch(LLM_URL.replace(/\/+$/, "") + "/reply", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ persona: person(other), me: person(db.me), history: history.map((m) => ({ mine: m.mine, body: m.body })) }),
+              signal: AbortSignal.timeout(90000),
+            });
+            const data = await res.json();
+            return res.ok && data.reply ? data.reply : null;
+          } catch (err) {
+            console.warn("로컬 LLM 응답 실패 → 기본 답장 사용", err);
+            llm.ok = false;
+            return null;
+          }
+        }
+
         return {
           online: false,
           async session() { return true; },
@@ -1008,21 +1043,26 @@
             const p = (pending[matchId] ||= { texts: [], timer: null });
             p.texts.push(body);
             clearTimeout(p.timer);
-            p.timer = setTimeout(() => {
+            p.timer = setTimeout(async () => {
               const text = p.texts.join(" ");
               delete pending[matchId];
-              const memory = ((db.chat ||= {})[matchId] ||= { greeted: false, asked: [] });
-              const answer = reply(byId(match.otherId), db.me, text, memory);
-              save();
+              const other = byId(match.otherId);
               listeners?.onTyping?.(matchId, true);
-              setTimeout(() => {
-                listeners?.onTyping?.(matchId, false);
-                listeners?.onMessage(add(false, answer));
-              }, Math.min(4000, 700 + answer.length * 45));
+              // 로컬 LLM이 켜져 있으면 LLM이, 아니면 규칙 기반으로 답장
+              let answer = await llmReply(other, (db.messages[matchId] || []).slice(-12));
+              if (!answer) {
+                const memory = ((db.chat ||= {})[matchId] ||= { greeted: false, asked: [] });
+                answer = reply(other, db.me, text, memory);
+                save();
+                await new Promise((r) => setTimeout(r, Math.min(4000, 700 + answer.length * 45)));
+              }
+              listeners?.onTyping?.(matchId, false);
+              listeners?.onMessage(add(false, answer));
             }, 900 + Math.random() * 600);
             return msg;
           },
           subscribe(l) { listeners = l; return () => { listeners = null; }; },
+          checkLlm,
         };
       }
 
@@ -1691,6 +1731,12 @@
       async function startMain() {
         show("main");
         $("#demo-pill").hidden = api.online;
+        if (!api.online) {
+          api.checkLlm().then((ok) => {
+            $("#demo-pill").textContent = ok ? "데모 · AI 대화" : "데모";
+            $("#demo-pill").title = ok ? "채팅 상대가 내 PC의 로컬 LLM으로 대답해요" : "";
+          });
+        }
         selectTab("discover");
         updateDot();
         state.unsubscribe?.();
