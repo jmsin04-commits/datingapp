@@ -208,6 +208,15 @@
       gap: 12px 8px; align-content: start; padding: 2px 2px 16px;
     }
     .grid .empty { grid-column: 1 / -1; min-height: 60vh; }
+    /* 목록 위: 지금 적용된 필터와 맞는 사람 수 */
+    .filter-bar {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      padding: 8px 12px; margin-bottom: 10px; border-radius: 12px;
+      background: var(--accent-soft); font-size: 0.85rem;
+    }
+    .filter-bar .sum { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .filter-bar b { color: var(--accent); }
+    .filter-bar button { flex: none; border: 0; background: none; padding: 4px 0; color: var(--accent); font-weight: 700; font-size: 0.85rem; }
     .tile { position: relative; min-width: 0; transition: transform 0.25s ease, opacity 0.25s ease; }
     .tile.gone { transform: scale(0.85); opacity: 0; }
     .tile-open { display: block; width: 100%; border: 0; padding: 0; background: none; color: var(--text); text-align: left; }
@@ -425,6 +434,7 @@
           <button class="icon-btn" id="open-filter" type="button">⚙︎ 필터</button>
         </div>
       </div>
+      <div class="filter-bar" id="filter-bar" hidden></div>
       <div class="grid" id="grid" hidden></div>
       <div class="deck" id="deck"></div>
       <div class="actions" id="actions">
@@ -1389,6 +1399,7 @@
           b.setAttribute("aria-pressed", String(b.dataset.view === state.view));
         }
         $("#grid").hidden = !grid;
+        renderFilterBar();
         $("#main").classList.toggle("wide", grid);
         $("#deck").hidden = grid;
         if (grid) { $("#actions").hidden = true; renderGrid(); }
@@ -1417,7 +1428,23 @@
             <button type="button" class="tile-like" data-like="${esc(p.id)}" aria-label="${esc(p.name)}님 좋아요">♥</button>
           </div>`;
       }
+      function renderFilterBar() {
+        const bar = $("#filter-bar");
+        bar.hidden = state.view !== "grid";
+        if (bar.hidden) return;
+        const f = state.filters;
+        const n = state.deck.length;
+        const conds = [`${f.min_age}~${f.max_age}세`, f.region || "전국", f.interests.length ? f.interests.join("·") : "관심사 전체"];
+        // 온라인은 한 번에 30명까지 불러오므로 30이면 "30명+"
+        bar.innerHTML = `<span class="sum">맞는 사람 <b>${n}명${api.online && n >= 30 ? "+" : ""}</b> · ${esc(conds.join(" · "))}</span>
+          <button type="button" data-action="filter">필터 바꾸기</button>`;
+      }
+      $("#filter-bar").addEventListener("click", (e) => {
+        if (e.target.closest("[data-action=filter]")) openFilter();
+      });
+
       function renderGrid() {
+        renderFilterBar();
         $("#grid").innerHTML = state.deck.length ? state.deck.map(tileHTML).join("") : EMPTY_HTML;
       }
       const findPerson = (id) => state.deck.find((p) => String(p.id) === id);
@@ -1445,6 +1472,7 @@
         const [result] = await Promise.all([decide(person, like), new Promise((r) => setTimeout(r, 250))]);
         if (!result.ok) { tile.classList.remove("gone"); return; }
         tile.remove();
+        renderFilterBar();
         if (state.deck.length === 0) await loadDeck();
         if (result.matchId) showMatch(person, result.matchId);
       }
@@ -1595,6 +1623,10 @@
         }
         $("#filter-dialog").returnValue = "";
         store.set("seollem-filters", state.filters);
+        // 필터를 바꾸면 맞는 사람들을 목록으로 한눈에 보여줌
+        state.view = "grid";
+        store.set("seollem-view", state.view);
+        selectTab("discover");
         loadDeck();
       });
 
