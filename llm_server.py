@@ -87,12 +87,13 @@ def allowed(origin: str | None) -> bool:
 
 @app.before_request
 def same_network_only():
-    """--lan 이어도 같은 네트워크(사설 IP: 192.168.x.x, 10.x.x.x 등)에서 온 접속만 받음."""
+    """--lan 이어도 같은 네트워크(사설 IP: 192.168.x.x, 10.x.x.x, 100.64.x.x 등)에서 온 접속만 받음."""
     try:
         ip = ipaddress.ip_address(request.remote_addr or "")
     except ValueError:
         return jsonify(error="접속할 수 없어요."), 403
-    if not (ip.is_private or ip.is_loopback):
+    # 100.64~100.127.x.x: 학교·통신사 내부망이나 Tailscale이 쓰는 주소 (인터넷 공인 IP 아님)
+    if not (ip.is_private or ip.is_loopback or ip in ipaddress.ip_network("100.64.0.0/10")):
         return jsonify(error="같은 와이파이에서만 접속할 수 있어요."), 403
     return None
 
