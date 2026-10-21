@@ -33,7 +33,7 @@
 3. **Authentication → Sign In / Providers → Email**
    - 테스트할 때는 **Confirm email** 을 끄면 가입 즉시 로그인됩니다.
    - 켜두려면 **Authentication → URL Configuration → Site URL** 을 배포 주소
-     (`https://<내아이디>.github.io/dating-app/`)로 바꿔야 인증 메일 링크가 제대로 열립니다.
+     (`https://<내아이디>.github.io/datingapp/`)로 바꿔야 인증 메일 링크가 제대로 열립니다.
 4. **Project Settings → API** 에서 두 값을 복사해 `index.html`의 `DATING_CONFIG`에 붙여넣기
    - Project URL → `SUPABASE_URL`
    - `anon` / `publishable` 키 → `SUPABASE_KEY`
@@ -48,20 +48,20 @@
 
 ## 2. GitHub에 올리기
 
-1. https://github.com/new 에서 새 저장소 생성 (예: `dating-app`, **Public**)
+1. https://github.com/new 에서 새 저장소 생성 (예: `datingapp`, **Public**)
 2. 이 폴더에서:
 
    ```bash
    git init -b main
    git add .
    git commit -m "소개팅 앱"
-   git remote add origin https://github.com/<내아이디>/dating-app.git
+   git remote add origin https://github.com/<내아이디>/datingapp.git
    git push -u origin main
    ```
 
 3. 저장소 → **Settings → Pages** → Source: **Deploy from a branch** → Branch: `main` / `/ (root)` → **Save**
 
-1~2분 뒤 `https://<내아이디>.github.io/dating-app/` 로 접속할 수 있습니다.
+1~2분 뒤 `https://<내아이디>.github.io/datingapp/` 로 접속할 수 있습니다.
 
 ## 로컬에서 미리 보기
 
