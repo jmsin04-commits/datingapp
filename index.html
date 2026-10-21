@@ -201,11 +201,11 @@
     .view-toggle button[aria-pressed=true] { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
 
     /* ───── 목록 보기 (여러 명) ───── */
-    /* 한 줄에 5명. 목록 보기일 때는 화면을 넓게 씀 (PC) */
+    /* 폰은 한 줄에 3명, PC(640px 이상)는 5명. 목록 보기일 때는 화면을 넓게 씀 */
     #main.wide { max-width: 1000px; }
     .grid {
-      flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
-      gap: 6px; align-content: start; padding: 2px 2px 16px;
+      flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px 8px; align-content: start; padding: 2px 2px 16px;
     }
     .grid .empty { grid-column: 1 / -1; min-height: 60vh; }
     .tile { position: relative; min-width: 0; transition: transform 0.25s ease, opacity 0.25s ease; }
@@ -222,23 +222,24 @@
     }
     .tile-open .ph > img { object-fit: cover; }
     .tile-open .ph > span {
-      display: grid; place-items: center; font-size: clamp(0.95rem, 4.5vw, 3rem); line-height: 1; font-weight: 800; padding-top: 14%; color: rgba(255, 255, 255, 0.92);
+      display: grid; place-items: center; font-size: clamp(1.6rem, 8vw, 3rem); line-height: 1; font-weight: 800; padding-top: 14%; color: rgba(255, 255, 255, 0.92);
     }
     /* 이름·정보는 사진 아래에 (사진·♥와 겹치지 않게) */
     .tile-open .cap { padding: 4px 2px 0; line-height: 1.3; }
     .tile-open .cap b, .tile-open .cap small {
       display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-    .tile-open .cap b { font-size: 0.78rem; }
-    .tile-open .cap small { font-size: 0.68rem; color: var(--muted); }
+    .tile-open .cap b { font-size: 0.9rem; }
+    .tile-open .cap small { font-size: 0.75rem; color: var(--muted); }
     .tile-open .cap .ints { display: none; }
     .tile-like {
-      position: absolute; right: 3px; top: 3px; width: 22px; height: 22px; border-radius: 50%;
-      border: 0; padding: 0; background: var(--surface); color: var(--accent); font-size: 0.7rem;
+      position: absolute; right: 5px; top: 5px; width: 30px; height: 30px; border-radius: 50%;
+      border: 0; padding: 0; background: var(--surface); color: var(--accent); font-size: 0.9rem;
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); display: grid; place-items: center;
     }
     @media (min-width: 640px) {
-      .grid { gap: 16px 12px; }
+      .grid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px 12px; }
+      .tile-open .ph > span { font-size: clamp(1.6rem, 4.5vw, 3rem); }
       .tile-open .ph { border-radius: 14px; }
       .tile-open .cap { padding: 8px 2px 0; }
       .tile-open .cap b { font-size: 1rem; }
@@ -380,7 +381,7 @@
         <br>
         <label class="field"><span class="label">이름 (닉네임)</span>
           <input type="text" name="name" maxlength="20" required></label>
-        <label class="field"><span class="label">태어난 해 <span class="hint">(만 19세 이상)</span></span>
+        <label class="field"><span class="label">태어난 해 <span class="hint">(19~35세만 가입할 수 있어요)</span></span>
           <input type="number" name="birth_year" inputmode="numeric" required></label>
         <div class="field"><span class="label">성별</span>
           <div class="seg">
@@ -477,9 +478,9 @@
       <h3>어떤 사람을 볼까요?</h3>
       <div class="field"><span class="label">나이</span>
         <div class="row">
-          <input type="number" name="min_age" min="19" max="99" inputmode="numeric">
+          <input type="number" name="min_age" min="19" max="35" inputmode="numeric">
           <span style="align-self:center">~</span>
-          <input type="number" name="max_age" min="19" max="99" inputmode="numeric">
+          <input type="number" name="max_age" min="19" max="35" inputmode="numeric">
         </div>
       </div>
       <br>
@@ -537,7 +538,8 @@
       const MAX_INTERESTS = 5;
       const MAX_PHOTOS = 4;
       const THIS_YEAR = new Date().getFullYear();
-      const DEFAULT_FILTERS = { min_age: 19, max_age: 45, region: "", interests: [] };
+      const MIN_AGE = 19, MAX_AGE = 35; // 가입·검색 가능한 나이
+      const DEFAULT_FILTERS = { min_age: MIN_AGE, max_age: MAX_AGE, region: "", interests: [] };
 
       const { SUPABASE_URL, SUPABASE_KEY } = window.DATING_CONFIG || {};
       const ONLINE = Boolean(SUPABASE_URL && SUPABASE_KEY);
@@ -873,38 +875,59 @@
       function createDemoApi() {
         const KEY = "seollem-demo-v1";
         const SEED = [
-          ["d1", "지은", 1997, "F", "M", "서울", ["카페", "전시회", "사진"], "주말엔 동네 카페 투어해요. 좋아하는 카페 공유해 주실 분!"],
-          ["d2", "민준", 1995, "M", "F", "서울", ["운동", "러닝", "맛집"], "한강 러닝 크루 활동 중이에요. 같이 뛰고 맛있는 거 먹어요 🏃"],
-          ["d3", "서연", 1999, "F", "M", "경기", ["영화", "독서", "음악"], "넷플릭스보다 극장파. 요즘 읽는 책 얘기하는 거 좋아해요."],
-          ["d4", "도윤", 1993, "M", "F", "부산", ["여행", "드라이브", "사진"], "바다 보면서 드라이브하는 게 최고의 힐링이라고 생각해요."],
-          ["d5", "하린", 1996, "F", "M", "인천", ["요리", "와인", "맛집"], "요리하는 거 좋아해요. 제 파스타 맛 보실 분?"],
-          ["d6", "준호", 1998, "M", "F", "대전", ["게임", "영화", "음악"], "롤 골드… 하지만 진지하게 대화할 줄도 알아요 ㅎㅎ"],
-          ["d7", "수아", 1994, "F", "M", "서울", ["공연", "음악", "패션"], "뮤지컬 덕후입니다. 공연 같이 보러 다닐 사람 구해요!"],
-          ["d8", "현우", 1996, "M", "F", "경기", ["등산", "운동", "여행"], "주말마다 산에 가요. 정상에서 먹는 컵라면이 진리."],
-          ["d9", "유나", 2000, "F", "M", "대구", ["반려동물", "카페", "사진"], "고양이 두 마리 집사예요 🐈 사진 많이 보여드릴게요."],
-          ["d10", "지호", 1992, "M", "F", "서울", ["와인", "요리", "독서"], "조용한 와인바에서 오래 이야기 나누는 걸 좋아합니다."],
-          ["d11", "예린", 1995, "F", "ALL", "광주", ["여행", "맛집", "드라이브"], "1년에 한 번은 꼭 해외여행! 다음 여행지 추천 받아요."],
-          ["d12", "태윤", 1997, "M", "ALL", "서울", ["전시회", "패션", "카페"], "전시 보고 근처 카페에서 감상 나누는 데이트 좋아해요."],
-          ["d13", "다은", 1998, "F", "F", "서울", ["음악", "공연", "러닝"], "페스티벌 가는 게 낙이에요. 올해 라인업 얘기해요!"],
-          ["d14", "시우", 1994, "M", "M", "경기", ["운동", "요리", "영화"], "운동 끝나고 건강하게 요리해 먹는 루틴러."],
-          ["d15", "채원", 1993, "F", "M", "제주", ["여행", "사진", "등산"], "제주 살아요. 오름 같이 오를 사람 🌿"],
-          ["d16", "건우", 1999, "M", "F", "울산", ["게임", "맛집", "반려동물"], "강아지 산책 메이트 구합니다 (강아지가 사람을 좋아해요)"],
-          ["d17", "소윤", 2004, "F", "M", "서울", ["카페", "패션", "음악"], "대학교 3학년이에요! 홍대·연남 카페 투어 같이 해요 ☕"],
-          ["d18", "민서", 2001, "F", "M", "경기", ["러닝", "운동", "맛집"], "필라테스랑 러닝 하는 갓생러… 운동 끝나고 먹는 떡볶이가 최고"],
-          ["d19", "가은", 1998, "F", "M", "서울", ["독서", "전시회", "와인"], "주말엔 서점이랑 미술관. 조용히 오래 얘기하는 거 좋아해요"],
-          ["d20", "나연", 2002, "F", "M", "부산", ["여행", "사진", "드라이브"], "광안리 근처 살아요 🌊 바다 사진 찍으러 같이 가요!"],
-          ["d21", "하은", 1996, "F", "ALL", "인천", ["요리", "반려동물", "영화"], "강아지 한 마리랑 살아요. 집밥 + 영화 데이트 좋아해요"],
-          ["d22", "윤아", 2005, "F", "M", "대전", ["공연", "음악", "게임"], "아이돌 콘서트 다니는 게 낙! 노래방 점수 90점 이상 ㅎㅎ"],
-          ["d23", "지훈", 2000, "M", "F", "서울", ["운동", "여행", "카페"], "클라이밍 2년차예요. 같이 볼더링 가실 분 🧗"],
-          ["d24", "은우", 2003, "M", "F", "경기", ["게임", "영화", "맛집"], "공대생입니다. 맛집 리스트 엑셀로 관리해요 ㅋㅋ"],
-          ["d25", "서진", 1997, "M", "F", "서울", ["와인", "요리", "전시회"], "요리하는 남자. 직접 만든 파스타 대접해 드릴게요 🍝"],
-          ["d26", "재민", 2001, "M", "ALL", "제주", ["등산", "사진", "드라이브"], "제주에서 일해요. 오름이랑 해안도로 가이드 가능합니다"],
+          ["d1", "지은", 29, "F", "M", "서울", ["카페", "전시회", "사진"], "주말엔 동네 카페 투어해요. 좋아하는 카페 공유해 주실 분!"],
+          ["d2", "민준", 31, "M", "F", "서울", ["운동", "러닝", "맛집"], "한강 러닝 크루 활동 중이에요. 같이 뛰고 맛있는 거 먹어요 🏃"],
+          ["d3", "서연", 27, "F", "M", "경기", ["영화", "독서", "음악"], "넷플릭스보다 극장파. 요즘 읽는 책 얘기하는 거 좋아해요."],
+          ["d4", "도윤", 33, "M", "F", "부산", ["여행", "드라이브", "사진"], "바다 보면서 드라이브하는 게 최고의 힐링이라고 생각해요."],
+          ["d5", "하린", 30, "F", "M", "인천", ["요리", "와인", "맛집"], "요리하는 거 좋아해요. 제 파스타 맛 보실 분?"],
+          ["d6", "준호", 28, "M", "F", "대전", ["게임", "영화", "음악"], "롤 골드… 하지만 진지하게 대화할 줄도 알아요 ㅎㅎ"],
+          ["d7", "수아", 32, "F", "M", "서울", ["공연", "음악", "패션"], "뮤지컬 덕후입니다. 공연 같이 보러 다닐 사람 구해요!"],
+          ["d8", "현우", 30, "M", "F", "경기", ["등산", "운동", "여행"], "주말마다 산에 가요. 정상에서 먹는 컵라면이 진리."],
+          ["d9", "유나", 26, "F", "M", "대구", ["반려동물", "카페", "사진"], "고양이 두 마리 집사예요 🐈 사진 많이 보여드릴게요."],
+          ["d10", "지호", 34, "M", "F", "서울", ["와인", "요리", "독서"], "조용한 와인바에서 오래 이야기 나누는 걸 좋아합니다."],
+          ["d11", "예린", 31, "F", "ALL", "광주", ["여행", "맛집", "드라이브"], "1년에 한 번은 꼭 해외여행! 다음 여행지 추천 받아요."],
+          ["d12", "태윤", 29, "M", "ALL", "서울", ["전시회", "패션", "카페"], "전시 보고 근처 카페에서 감상 나누는 데이트 좋아해요."],
+          ["d13", "다은", 28, "F", "F", "서울", ["음악", "공연", "러닝"], "페스티벌 가는 게 낙이에요. 올해 라인업 얘기해요!"],
+          ["d14", "시우", 32, "M", "M", "경기", ["운동", "요리", "영화"], "운동 끝나고 건강하게 요리해 먹는 루틴러."],
+          ["d15", "채원", 33, "F", "M", "제주", ["여행", "사진", "등산"], "제주 살아요. 오름 같이 오를 사람 🌿"],
+          ["d16", "건우", 27, "M", "F", "울산", ["게임", "맛집", "반려동물"], "강아지 산책 메이트 구합니다 (강아지가 사람을 좋아해요)"],
+          ["d17", "소윤", 22, "F", "M", "서울", ["카페", "패션", "음악"], "대학교 3학년이에요! 홍대·연남 카페 투어 같이 해요 ☕"],
+          ["d18", "민서", 25, "F", "M", "경기", ["러닝", "운동", "맛집"], "필라테스랑 러닝 하는 갓생러… 운동 끝나고 먹는 떡볶이가 최고"],
+          ["d19", "가은", 28, "F", "M", "서울", ["독서", "전시회", "와인"], "주말엔 서점이랑 미술관. 조용히 오래 얘기하는 거 좋아해요"],
+          ["d20", "나연", 24, "F", "M", "부산", ["여행", "사진", "드라이브"], "광안리 근처 살아요 🌊 바다 사진 찍으러 같이 가요!"],
+          ["d21", "하은", 30, "F", "ALL", "인천", ["요리", "반려동물", "영화"], "강아지 한 마리랑 살아요. 집밥 + 영화 데이트 좋아해요"],
+          ["d22", "윤아", 21, "F", "M", "대전", ["공연", "음악", "게임"], "아이돌 콘서트 다니는 게 낙! 노래방 점수 90점 이상 ㅎㅎ"],
+          ["d23", "지훈", 26, "M", "F", "서울", ["운동", "여행", "카페"], "클라이밍 2년차예요. 같이 볼더링 가실 분 🧗"],
+          ["d24", "은우", 23, "M", "F", "경기", ["게임", "영화", "맛집"], "공대생입니다. 맛집 리스트 엑셀로 관리해요 ㅋㅋ"],
+          ["d25", "서진", 29, "M", "F", "서울", ["와인", "요리", "전시회"], "요리하는 남자. 직접 만든 파스타 대접해 드릴게요 🍝"],
+          ["d26", "재민", 25, "M", "ALL", "제주", ["등산", "사진", "드라이브"], "제주에서 일해요. 오름이랑 해안도로 가이드 가능합니다"],
+          ["d27", "다인", 19, "F", "M", "서울", ["카페", "음악", "패션"], "새내기 대학생이에요! 학교 근처 맛집 같이 다녀요 🎓"],
+          ["d28", "준서", 20, "M", "F", "경기", ["게임", "운동", "맛집"], "군대 가기 전에 추억 많이 만들고 싶어요 ㅎㅎ"],
+          ["d29", "예나", 21, "F", "M", "대구", ["사진", "카페", "여행"], "필름카메라 들고 동성로 돌아다니는 거 좋아해요 📷"],
+          ["d30", "도현", 22, "M", "F", "광주", ["러닝", "음악", "영화"], "아침 러닝 후 카페에서 음악 듣는 게 루틴이에요"],
+          ["d31", "수빈", 23, "F", "M", "서울", ["전시회", "독서", "카페"], "졸업 준비 중! 주말엔 미술관 가서 머리 식혀요"],
+          ["d32", "시윤", 24, "M", "F", "인천", ["드라이브", "맛집", "사진"], "첫 차 뽑았어요 🚗 드라이브 메이트 구해요"],
+          ["d33", "지아", 25, "F", "M", "부산", ["요리", "와인", "영화"], "해운대 근처 살아요. 집에서 요리해서 와인 한잔 좋아해요"],
+          ["d34", "우진", 26, "M", "F", "서울", ["등산", "운동", "여행"], "주말마다 산이나 바다로 떠나요. 같이 갈 사람!"],
+          ["d35", "하윤", 27, "F", "M", "경기", ["반려동물", "카페", "독서"], "고양이 키워요 🐈 조용한 북카페 좋아해요"],
+          ["d36", "태민", 28, "M", "F", "대전", ["게임", "요리", "음악"], "퇴근하고 요리하는 게 힐링이에요. 같이 먹어줄 사람?"],
+          ["d37", "서아", 29, "F", "ALL", "서울", ["공연", "패션", "맛집"], "뮤지컬이랑 콘서트 덕후! 맛집 리스트 공유해요"],
+          ["d38", "현준", 30, "M", "F", "울산", ["운동", "러닝", "드라이브"], "마라톤 풀코스 완주가 목표입니다 🏃"],
+          ["d39", "다연", 31, "F", "M", "서울", ["와인", "전시회", "여행"], "1년에 두 번은 여행 가요. 다음엔 포르투갈!"],
+          ["d40", "성민", 32, "M", "F", "경남", ["사진", "등산", "카페"], "주말엔 카메라 들고 산에 가요. 풍경 사진 좋아해요"],
+          ["d41", "은서", 33, "F", "M", "충남", ["요리", "반려동물", "영화"], "강아지랑 산책하고 집밥 해 먹는 소소한 일상 좋아해요"],
+          ["d42", "정우", 34, "M", "ALL", "서울", ["와인", "독서", "공연"], "재즈바 좋아해요. 대화 잘 통하는 분 만나고 싶어요"],
+          ["d43", "민지", 35, "F", "M", "경기", ["여행", "맛집", "운동"], "요가 5년차예요 🧘 맛있는 거 먹으러 같이 다녀요"],
         ];
         const JOBS = ["UX 디자이너", "백엔드 개발자", "대학원생", "마케터", "요리 강사", "게임 기획자", "공연 기획자", "공무원",
           "대학생", "변호사", "승무원", "패션 MD", "작곡가", "헬스 트레이너", "게스트하우스 사장", "동물병원 직원",
-          "대학생", "필라테스 강사", "출판사 편집자", "대학생", "간호사", "대학생", "스타트업 PM", "대학생", "셰프", "리조트 직원"];
-        const PROFILES = SEED.map(([id, name, birth_year, gender, looking_for, region, interests, bio], i) =>
-          ({ id, name, birth_year, gender, looking_for, region, interests, bio, job: JOBS[i], likesYou: i % 3 !== 2 }));
+          "대학생", "필라테스 강사", "출판사 편집자", "대학생", "간호사", "대학생", "스타트업 PM", "대학생", "셰프", "리조트 직원",
+          "대학교 새내기", "대학생", "대학생", "대학생", "대학생(졸업반)", "신입 회사원", "호텔리어", "소방관", "초등학교 교사",
+          "연구원", "브랜드 마케터", "엔지니어", "회계사", "건축가", "약사", "치과의사", "요가 강사"];
+        // 데모 프로필은 "나이"로 적어둠 → 해가 바뀌어도 나이가 그대로 (19~35세만 사용)
+        const PROFILES = SEED.map(([id, name, ageNow, gender, looking_for, region, interests, bio], i) =>
+          ({ id, name, birth_year: THIS_YEAR - ageNow, gender, looking_for, region, interests, bio, job: JOBS[i], likesYou: i % 3 !== 2 }))
+          .filter((p) => age(p) >= MIN_AGE && age(p) <= MAX_AGE);
         const reply = createDemoChatBot();
         const pending = {}; // matchId → 답장 타이머 (연달아 보내면 모아서 한 번에 답장)
 
@@ -1033,6 +1056,8 @@
         delete saved.interest;
         const f = { ...DEFAULT_FILTERS, ...saved };
         f.interests = (Array.isArray(f.interests) ? f.interests : []).filter((x) => INTERESTS.includes(x));
+        f.min_age = Math.min(MAX_AGE, Math.max(MIN_AGE, Number(f.min_age) || MIN_AGE));
+        f.max_age = Math.min(MAX_AGE, Math.max(f.min_age, Number(f.max_age) || MAX_AGE));
         return f;
       }
       const saveUnread = () => store.set("seollem-unread", [...state.unread]);
@@ -1139,8 +1164,8 @@
         renderPhotoGrid();
         form.elements.name.value = p.name;
         form.elements.birth_year.value = p.birth_year;
-        form.elements.birth_year.min = 1940;
-        form.elements.birth_year.max = THIS_YEAR - 19;
+        form.elements.birth_year.min = THIS_YEAR - MAX_AGE;
+        form.elements.birth_year.max = THIS_YEAR - MIN_AGE;
         form.elements.gender.value = p.gender;
         form.elements.looking_for.value = p.looking_for;
         form.elements.region.value = p.region;
@@ -1212,6 +1237,11 @@
         const form = e.target;
         const interests = [...$("#interest-chips").querySelectorAll("[aria-pressed=true]")].map((c) => c.dataset.v);
         if (interests.length === 0) { $("#setup-error").textContent = "관심사를 하나 이상 골라주세요."; return; }
+        const by = Number(form.elements.birth_year.value);
+        if (THIS_YEAR - by < MIN_AGE || THIS_YEAR - by > MAX_AGE) {
+          $("#setup-error").textContent = `${MIN_AGE}~${MAX_AGE}세만 가입할 수 있어요. (${THIS_YEAR - MAX_AGE}~${THIS_YEAR - MIN_AGE}년생)`;
+          return;
+        }
         const profile = {
           name: form.elements.name.value.trim(),
           birth_year: Number(form.elements.birth_year.value),
@@ -1476,8 +1506,8 @@
           state.filters = { ...DEFAULT_FILTERS };
         } else if (choice === "apply") {
           const f = $("#filter-form");
-          let min = Math.max(19, Number(f.elements.min_age.value) || 19);
-          let max = Math.min(99, Number(f.elements.max_age.value) || 99);
+          let min = Math.min(MAX_AGE, Math.max(MIN_AGE, Number(f.elements.min_age.value) || MIN_AGE));
+          let max = Math.min(MAX_AGE, Math.max(MIN_AGE, Number(f.elements.max_age.value) || MAX_AGE));
           if (min > max) [min, max] = [max, min];
           const interests = [...$("#filter-chips").querySelectorAll("[aria-pressed=true]")].map((c) => c.dataset.v);
           state.filters = { min_age: min, max_age: max, region: f.elements.region.value, interests };

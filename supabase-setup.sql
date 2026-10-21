@@ -27,6 +27,25 @@ alter table public.profiles drop constraint if exists profiles_photos_check;
 alter table public.profiles add constraint profiles_photos_check
   check (cardinality(photos) <= 4 and public.valid_photo_paths(id, photos));
 
+-- 나이 제한: 19~35세만 프로필 저장 가능 (나이 = 올해 - 태어난 해)
+create or replace function public.check_profile_age()
+returns trigger
+language plpgsql
+as $$
+declare
+  a int := extract(year from now())::int - new.birth_year;
+begin
+  if a < 19 or a > 35 then
+    raise exception '19~35세만 가입할 수 있어요 (현재 %세)', a;
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists profiles_age_check on public.profiles;
+create trigger profiles_age_check
+  before insert or update of birth_year on public.profiles
+  for each row execute function public.check_profile_age();
+
 alter table public.profiles enable row level security;
 drop policy if exists "signed-in users read profiles" on public.profiles;
 create policy "signed-in users read profiles" on public.profiles
@@ -126,12 +145,12 @@ $$;
 revoke execute on function public.swipe(uuid, boolean) from public, anon;
 grant execute on function public.swipe(uuid, boolean) to authenticated;
 
--- 아직 안 본 상대 중 서로 성별 조건이 맞고 필터를 통과하는 사람 (무작위 30명)
+-- 아직 안 본 상대 중 서로 성별 조건이 맞고 필터를 통과하는 사람 (무작위 30명, 19~35세만)
 -- f_interests: 고른 관심사 중 하나라도 겹치면 통과 (null이면 관심사 무관)
 drop function if exists public.get_candidates(int, int, text, text);  -- 예전 버전(관심사 1개)
 create or replace function public.get_candidates(
   min_age int default 19,
-  max_age int default 99,
+  max_age int default 35,
   f_region text default null,
   f_interests text[] default null
 )
@@ -146,7 +165,7 @@ as $$
   where p.id <> me.id
     and (me.looking_for = 'ALL' or p.gender = me.looking_for)
     and (p.looking_for = 'ALL' or p.looking_for = me.gender)
-    and extract(year from now())::int - p.birth_year between min_age and max_age
+    and extract(year from now())::int - p.birth_year between greatest(min_age, 19) and least(max_age, 35)
     and (f_region is null or p.region = f_region)
     and (f_interests is null or cardinality(f_interests) = 0 or p.interests && f_interests)
     and not exists (select 1 from likes l where l.from_id = me.id and l.to_id = p.id)
@@ -220,3 +239,8 @@ drop policy if exists "read own photo objects" on storage.objects;
 create policy "read own photo objects" on storage.objects
   for select to authenticated
   using (bucket_id = 'photos' and (storage.foldername(name))[1] = auth.uid()::text);
+
+-- ───────────── 36세 이상 프로필 정리 ─────────────
+-- 위 함수 때문에 36세 이상은 이미 목록에 안 나오지만, 데이터까지 지우려면 아래 줄의 맨 앞 "-- "를 지우고 실행하세요.
+-- (계정은 남고 프로필·좋아요·매칭·채팅만 지워집니다. 되돌릴 수 없어요)
+-- delete from public.profiles where extract(year from now())::int - birth_year > 35;
