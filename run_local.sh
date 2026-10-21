@@ -12,6 +12,15 @@ if ! python3 -c "import llama_cpp, flask" 2>/dev/null; then
   pip install --user -q llama-cpp-python flask --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
 fi
 
+# 이미 켜져 있는 서버가 있으면 알려 주고 멈춤 (예전 실행이 남아 있는 경우)
+for port in 8000 7861; do
+  if python3 -c "import socket,sys; s=socket.socket(); sys.exit(s.connect_ex(('127.0.0.1',$port))!=0)"; then
+    echo "포트 $port 를 이미 다른 프로그램이 쓰고 있어요. 예전에 켠 서버를 끄고 다시 실행하세요."
+    echo "  (확인: ps aux | grep -E 'http.server|llm_server')"
+    exit 1
+  fi
+done
+
 python3 llm_server.py "$@" &
 LLM_PID=$!
 trap 'kill $LLM_PID 2>/dev/null' EXIT
