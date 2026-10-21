@@ -286,6 +286,14 @@
     .msg.other { align-self: flex-start; background: var(--bubble-other); border-bottom-left-radius: 6px; }
     .msg-time { font-size: 0.7rem; color: var(--muted); margin: 0 4px; }
     .msg-time.mine { align-self: flex-end; }
+    .msg.typing { display: flex; gap: 4px; padding: 12px 14px; }
+    .msg.typing i {
+      width: 7px; height: 7px; border-radius: 50%; background: var(--muted);
+      animation: blink 1.2s infinite both;
+    }
+    .msg.typing i:nth-child(2) { animation-delay: 0.2s; }
+    .msg.typing i:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes blink { 0%, 80%, 100% { opacity: 0.25; } 40% { opacity: 1; } }
     .chat-hello { text-align: center; color: var(--muted); font-size: 0.9rem; margin: auto 0; }
     .composer {
       display: flex; gap: 8px; padding: 10px 0 max(10px, env(safe-area-inset-bottom));
@@ -652,6 +660,195 @@
         };
       }
 
+      // ───────────────────────────────────────────────
+      // 데모 상대의 대화: 내 메시지에서 질문/주제를 찾아 상대 프로필(관심사·지역·직업)에 맞게 답함
+      // ───────────────────────────────────────────────
+      function createDemoChatBot() {
+        // 관심사별: [~하고, ~해요] 활동 표현 + 그 주제로 할 말
+        const TOPICS = {
+          여행: ["여행 다니고", "여행 다녀요", ["최근엔 오사카 다녀왔어요! 다음엔 유럽 가보고 싶어요", "여행 가면 계획파예요, 즉흥파예요?"]],
+          맛집: ["맛집 찾아다니고", "맛집 찾아다녀요", ["요즘 꽂힌 건 평양냉면이에요 ㅎㅎ", "최근에 간 맛집 중에 제일 괜찮았던 데 있어요?"]],
+          카페: ["카페 가고", "카페 가요", ["성수 쪽 카페 자주 가요. 디저트 맛있는 데 좋아해요", "커피는 아아파예요 따아파예요?"]],
+          운동: ["운동하고", "운동해요", ["요즘 헬스 주 4회 다니고 있어요 💪", "운동 어떤 거 하세요?"]],
+          등산: ["등산 가고", "등산 가요", ["지난주엔 북한산 다녀왔어요! 정상에서 먹는 컵라면 최고예요", "가본 산 중에 어디가 제일 좋았어요?"]],
+          러닝: ["러닝하고", "러닝해요", ["한강에서 주 3번 정도 뛰어요 🏃", "같이 뛰면 더 잘 뛰어지던데 ㅎㅎ 러닝 해보셨어요?"]],
+          영화: ["영화 보고", "영화 봐요", ["최근에 본 영화 중엔 스릴러가 제일 재밌었어요", "인생 영화 하나만 꼽으면 뭐예요?"]],
+          음악: ["음악 듣고", "음악 들어요", ["요즘 인디 음악 많이 들어요", "요즘 꽂힌 노래 있어요? 추천해 주세요!"]],
+          독서: ["책 읽고", "책 읽어요", ["요즘 에세이 읽고 있어요. 한 달에 두세 권 정도?", "최근에 읽은 책 중에 추천할 만한 거 있어요?"]],
+          게임: ["게임하고", "게임해요", ["요즘 롤이랑 스팀 게임 번갈아 해요 ㅋㅋ", "어떤 게임 좋아하세요? 같이 할 수 있으면 좋겠다"]],
+          요리: ["요리하고", "요리해요", ["파스타랑 덮밥 종류 자신 있어요 ㅎㅎ", "제일 좋아하는 음식이 뭐예요?"]],
+          사진: ["사진 찍으러 다니고", "사진 찍으러 다녀요", ["필름 카메라로 찍는 거 좋아해요 📷", "사진 찍히는 거 좋아해요, 찍는 거 좋아해요?"]],
+          반려동물: ["반려동물이랑 놀고", "반려동물이랑 놀아요", ["집에 귀여운 애가 있어서 집순이/집돌이가 돼요 ㅎㅎ", "강아지파예요 고양이파예요?"]],
+          공연: ["공연 보러 가고", "공연 보러 가요", ["뮤지컬이랑 콘서트 자주 가요!", "최근에 본 공연 있어요?"]],
+          드라이브: ["드라이브 가고", "드라이브 가요", ["밤에 바다 보러 드라이브 가는 거 좋아해요 🌊", "드라이브할 때 듣는 플레이리스트 있어요?"]],
+          패션: ["쇼핑하고", "쇼핑해요", ["옷 구경하는 거 좋아해요. 요즘은 미니멀한 스타일?", "평소 스타일이 어떤 편이에요?"]],
+          와인: ["와인 마시고", "와인 마셔요", ["레드보다 화이트 좋아해요 🍷", "술 좋아하세요? 주량이 궁금 ㅎㅎ"]],
+          전시회: ["전시 보러 가고", "전시 보러 가요", ["요즘 사진전 많이 보러 다녀요", "최근에 본 전시 중에 기억에 남는 거 있어요?"]],
+        };
+        const NOW = ["집에서 쉬고 있었어요", "방금 저녁 먹었어요 ㅎㅎ", "씻고 누워있어요", "유튜브 보고 있었어요", "퇴근하고 들어왔어요"];
+        const MBTI = ["ENFP", "INFJ", "ISTJ", "ESFJ", "INTP", "ENTJ", "ISFP", "ESTP"];
+        const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+        const has = (t, re) => re.test(t);
+        // 받침 있으면 a, 없으면 b (예: 등산은 / 카페는)
+        const josa = (w, a, b) => { const c = w.charCodeAt(w.length - 1) - 0xac00; return w + (c >= 0 && c % 28 ? a : b); };
+
+        // 상대가 물어볼 질문들 (대화가 이어지도록, 같은 질문은 한 번만)
+        function followUps(me) {
+          const mine = me.interests || [];
+          return [
+            ["weekend", `${me.name}님은 주말에 주로 뭐 하세요?`],
+            ["hobby", mine[0] && `${mine[0]} 좋아하신다고 봤어요! 어떻게 시작하게 됐어요?`],
+            ["place", `${me.region}에 좋아하는 장소 있어요? 추천해 주세요 ㅎㅎ`],
+            ["job", "혹시 무슨 일 하세요?"],
+            ["movie", "요즘 제일 재밌게 본 거 있어요? 영화든 드라마든!"],
+            ["mbti", "MBTI 뭐예요? ㅎㅎ"],
+            ["ideal", "이상형이 어떻게 되세요?"],
+            ["food", "제일 좋아하는 음식 뭐예요?"],
+            ["trip", "요즘 가보고 싶은 여행지 있어요?"],
+            ["drink", "술은 좀 하세요? ㅎㅎ"],
+          ].filter(([, q]) => q);
+        }
+
+        return function reply(other, me, text, memory) {
+          const t = text.toLowerCase().trim();
+          const out = [];
+          const say = (line) => { if (line && out.length < 3) out.push(line); };
+          const theirs = other.interests || [];
+          const mine = me.interests || [];
+          const common = theirs.filter((x) => mine.includes(x));
+          const job = other.job || "회사원";
+          const mbti = MBTI[other.name.charCodeAt(0) % MBTI.length];
+          let asked = false; // 상대에게 되묻는 말을 이미 했는지
+          const prevQ = memory.lastQ; // 지난번에 내가(상대가) 던진 질문 → 이번 메시지는 그 대답일 가능성
+          memory.lastQ = null;
+          const isQuestion = /[?？]|뭐|무슨|어디|언제|누구|어떻|어때|몇|왜|세요$|나요$|까요$|래요$|셨어요$/.test(t);
+          const bye = /잘\s?자|굿밤|좋은\s?밤|내일\s?(봐|얘기)|들어가|바이|빠이/.test(t);
+          const mbtiSaid = t.match(/\b[ei][ns][tf][jp]\b/);
+          // 이 주제는 답했으니 나중에 따로 묻지 않음 (+ 필요하면 "○○님은요?"로 되물음)
+          const covered = (key, askBack) => {
+            if (!memory.asked.includes(key)) memory.asked.push(key);
+            if (askBack) { say(askBack); asked = true; memory.lastQ = key; }
+          };
+
+          // 인사
+          if (has(t, /안녕|반가|하이|ㅎㅇ|\bhi\b|hello|처음 뵙/)) {
+            say(memory.greeted ? "ㅎㅎ 또 안녕하세요!" : `안녕하세요 ${me.name}님! 매칭돼서 반가워요 😊`);
+            if (!memory.greeted && common.length) say(`저도 ${common[0]} 좋아해서 반가웠어요 ㅎㅎ`);
+            memory.greeted = true;
+          }
+          // 내 질문에 대한 대답으로 보이면 그에 맞게 반응
+          if (prevQ && !isQuestion && !bye && t.length > 2) {
+            const REACT = {
+              weekend: ["오 알차게 보내시네요 ㅎㅎ", "좋다~ 저도 그렇게 보내고 싶어요"],
+              hobby: ["멋있어요! 꾸준히 하는 거 대단해요", "오 저도 한번 해보고 싶어요"],
+              place: ["오 나중에 꼭 가봐야겠다 ㅎㅎ", "메모해둘게요 ㅎㅎ"],
+              job: ["오 멋있어요! 일 힘들진 않으세요?", "와 그 일 궁금했는데! 재밌어요?"],
+              movie: ["오 그거 재밌다던데! 저도 봐야겠어요", "저도 그거 보고 싶었어요 ㅎㅎ"],
+              mbti: [mbtiSaid ? `오 ${mbtiSaid[0].toUpperCase()}! 저랑 잘 맞을 것 같은데요? ㅎㅎ` : "ㅎㅎ 잘 모르시는구나! 저도 가끔 바뀌어요"],
+              ideal: ["오 ㅎㅎ 저는 해당되나요?", "ㅎㅎ 기준이 확실하시네요"],
+              food: ["오 저도 좋아해요! 맛집 알면 같이 가요 ㅎㅎ", "와 갑자기 배고파지네요 ㅋㅋ"],
+              trip: ["오 거기 좋죠! 저도 가보고 싶어요", "가면 사진 보여주세요 ㅎㅎ"],
+              drink: ["ㅎㅎ 저는 분위기 맞춰 마시는 편이에요", "오 그럼 다음에 한잔해요 ㅎㅎ"],
+            };
+            if (REACT[prevQ]) say(pick(REACT[prevQ]));
+          }
+
+          // 자기소개 질문들
+          if (has(t, /이름|성함|뭐라고 불/)) say(`저 ${other.name}이에요 ㅎㅎ 편하게 불러주세요`);
+          if (has(t, /나이|몇\s?살|년생|동갑/)) {
+            const myAge = THIS_YEAR - me.birth_year, a = THIS_YEAR - other.birth_year;
+            say(`${String(other.birth_year).slice(2)}년생 ${a}살이에요! ` +
+              (a === myAge ? "우리 동갑이네요 ㅎㅎ" : a < myAge ? "제가 동생이네요 ㅎㅎ"
+                : `제가 ${other.gender === "F" ? (me.gender === "M" ? "누나" : "언니") : (me.gender === "M" ? "형" : "오빠")}네요 ㅎㅎ`));
+          }
+          if (has(t, /어디\s?(살|사|에\s?살|쪽)|사는\s?곳|지역|동네|사시/)) {
+            say(`저는 ${other.region} 살아요. ` + (other.region === me.region ? `${me.name}님도 ${me.region}이시죠? 가깝네요!` : `${me.name}님은 ${me.region}이시죠? 조금 머네요 ㅠㅠ`));
+          }
+          if (has(t, /(\S+?)(에|에서)?\s?(살아요|살고|사는데|삽니다|살아)/) && !has(t, /어디|사세요|사시/)) {
+            const place = t.match(/(\S+?)(?:에|에서)?\s?(?:살아요|살고|사는데|삽니다|살아)/)[1];
+            say(place.length <= 6 && !/^(저는|전|나는|난)$/.test(place) ? `오 ${place}! 거기 좋죠 ㅎㅎ 저도 가끔 가요` : "오 그렇구나 ㅎㅎ");
+          }
+          if (has(t, /직업|무슨\s?일|어떤\s?일|회사|일\s?하|학생|전공/)) {
+            say(`저는 ${job}예요. 일은 재밌는데 가끔 바빠요 ㅠ`);
+            covered("job", `${me.name}님은 무슨 일 하세요?`);
+          }
+          if (has(t, /mbti|엠비티아이/)) { say(`저 ${mbti}예요!`); covered("mbti", `${me.name}님은요?`); }
+          if (has(t, /이상형/)) { say("대화가 잘 통하고 잘 웃는 사람이요 ㅎㅎ"); covered("ideal", `${me.name}님 이상형은요?`); }
+          if (has(t, /키가|키\s?몇|몸무게/)) say("ㅎㅎ 그건 만나서 확인하기로 해요!");
+
+          // 만남 제안
+          const meet = has(t, /만나|보자|볼래|봬요|약속|한잔|한\s?잔|밥\s?한|시간\s?(돼|되|괜찮)|언제\s?(볼|시간)|데이트|할래/);
+          if (meet) {
+            const spot = common[0] || theirs[0];
+            say(`좋아요!! 이번 주말 어때요? ${spot ? `${spot} 좋은 데 알아둘게요 ㅎㅎ` : ""}`);
+            asked = true;
+          }
+
+          // 주말/취미
+          if (!meet && isQuestion && has(t, /주말|취미|쉬는\s?날|여가|뭐\s?하면서|좋아하는\s?거/)) {
+            const [a, b] = theirs.map((x) => TOPICS[x]).filter(Boolean);
+            say(a && b ? `주말엔 보통 ${a[0]} ${b[1]} ㅎㅎ` : a ? `주말엔 보통 ${a[1]} ㅎㅎ` : "주말엔 그냥 푹 쉬어요 ㅎㅎ");
+            covered("weekend", `${me.name}님은요?`);
+          } else if (!meet) if (has(t, /뭐\s?해|뭐\s?하(고|세|시)|머\s?해|뭐하냐/)) {
+            say(`${pick(NOW)} ${me.name}님은 뭐 하고 계셨어요?`); asked = true;
+          }
+
+          // 묻지 않았는데 먼저 말해준 것들
+          if (!isQuestion && prevQ !== "mbti" && mbtiSaid) {
+            say(`오 ${mbtiSaid[0].toUpperCase()}시구나! 저는 ${mbti}예요 ㅎㅎ`);
+            covered("mbti");
+          }
+          if (!isQuestion && /주말/.test(t)) covered("weekend");
+          if (!isQuestion && prevQ !== "movie" && has(t, /봤어|봤는데|봤거든|보는\s?중|정주행/)) {
+            say(pick(["오 그거 재밌다던데! 저도 봐야겠어요", "아 그거 궁금했는데! 재밌었어요?"]));
+            covered("movie");
+          }
+
+          // 관심사 이야기: 내 메시지에 나온 주제
+          const mentioned = Object.keys(TOPICS).filter((x) => t.includes(x));
+          for (const topic of meet ? [] : mentioned.slice(0, 1)) {
+            const [, , lines] = TOPICS[topic];
+            if (theirs.includes(topic)) { say(`오 ${topic}! 저 완전 좋아해요`); say(lines[0]); }
+            else if (topic === mine[0] && !memory.asked.includes("hobby")) covered("hobby", `오 ${topic}! 프로필에서 봤어요 ㅎㅎ 어떻게 시작하게 됐어요?`);
+            else if (mine.includes(topic)) say(`${josa(topic, "을", "를")} 진짜 좋아하시나 봐요 ㅎㅎ 저도 같이 해보고 싶어요`);
+            else say(`${josa(topic, "은", "는")} 아직 잘 모르는데, 재밌어요? 알려주세요 ㅎㅎ`), asked = true;
+          }
+
+          // 칭찬/감정
+          if (has(t, /예쁘|이쁘|잘생|귀엽|멋지|매력/)) say(`헉 감사해요 ㅎㅎ ${me.name}님도요!`);
+          if (has(t, /고마|감사/)) say("에이 별말씀을요 ㅎㅎ");
+          if (has(t, /미안|죄송/)) say("괜찮아요! 신경 쓰지 마세요 ㅎㅎ");
+          if (bye) {
+            say(`네 ${me.name}님도 좋은 밤 보내세요 🌙 내일 또 얘기해요!`); asked = true;
+          }
+          if (has(t, /배고|밥\s?(먹|드)|저녁|점심/) && !out.length) { say(`저 방금 먹었어요! ${me.name}님은 뭐 드셨어요?`); asked = true; }
+
+          if (has(t, /날씨|비\s?(와|오)|더워|덥|추워|춥|눈\s?(와|오)/) && !out.length) {
+            say(has(t, /비|추|춥|눈/) ? "그러니까요 ㅠㅠ 이런 날엔 집에서 따뜻한 거 마시고 싶어요" : "그쵸! 산책하기 딱 좋은 날씨예요 ㅎㅎ");
+          }
+
+          // 아무 주제도 못 찾았을 때
+          if (!out.length) {
+            if (has(t, /ㅋㅋ|ㅎㅎ|하하|웃기/)) say(pick(["ㅋㅋㅋㅋ 재밌으시다", "ㅎㅎㅎ 저도 웃겨요", "ㅋㅋㅋ 아 진짜요?"]));
+            else if (has(t, /[?？]$|까요?$|나요?$|세요?$|어요\?|죠\?/)) say(pick(["음… 저는 좋아요 ㅎㅎ", "오 좋은 질문이네요 ㅎㅎ 저는 그런 편이에요", "맞아요 ㅎㅎ"]));
+            else if (t.length <= 4) say(pick(["ㅎㅎ", "ㅎㅎㅎ 네네", "그쵸 ㅎㅎ"]));
+            else if (/^(저는|저도|전|제가|나는|난)\s/.test(t)) say(pick([`오 ${me.name}님 그런 면이 있었군요 ㅎㅎ`, "헐 진짜요? 더 얘기해 주세요", "와 신기하다 ㅎㅎ"]));
+            else say(pick(["오 그렇구나 ㅎㅎ", "완전 공감해요", "아 그래요? 좋네요 ㅎㅎ"]));
+          }
+
+          // 대화가 끊기지 않게, 되묻지 않았으면 아직 안 한 질문 하나
+          if (!asked && out.length < 3) {
+            const next = followUps(me).find(([key]) => !memory.asked.includes(key));
+            if (next && (out.length <= 1 || Math.random() < 0.5)) {
+              memory.asked.push(next[0]);
+              memory.lastQ = next[0];
+              say(next[1]);
+            }
+          }
+          return out.join(" ");
+        };
+      }
+
       function createDemoApi() {
         const KEY = "seollem-demo-v1";
         const SEED = [
@@ -672,10 +869,12 @@
           ["d15", "채원", 1993, "F", "M", "제주", ["여행", "사진", "등산"], "제주 살아요. 오름 같이 오를 사람 🌿"],
           ["d16", "건우", 1999, "M", "F", "울산", ["게임", "맛집", "반려동물"], "강아지 산책 메이트 구합니다 (강아지가 사람을 좋아해요)"],
         ];
+        const JOBS = ["UX 디자이너", "백엔드 개발자", "대학원생", "마케터", "요리 강사", "게임 기획자", "공연 기획자", "공무원",
+          "대학생", "변호사", "승무원", "패션 MD", "작곡가", "헬스 트레이너", "게스트하우스 사장", "동물병원 직원"];
         const PROFILES = SEED.map(([id, name, birth_year, gender, looking_for, region, interests, bio], i) =>
-          ({ id, name, birth_year, gender, looking_for, region, interests, bio, likesYou: i % 3 !== 2 }));
-        const REPLIES = ["안녕하세요! 반가워요 😊", "ㅎㅎ 프로필 보고 궁금했어요", "오 저도 그거 좋아해요!",
-          "주말엔 보통 뭐 하세요?", "좋아요 ㅎㅎ 언제 시간 괜찮으세요?", "맞아요 완전 공감해요", "그럼 다음에 같이 가요!"];
+          ({ id, name, birth_year, gender, looking_for, region, interests, bio, job: JOBS[i], likesYou: i % 3 !== 2 }));
+        const reply = createDemoChatBot();
+        const pending = {}; // matchId → 답장 타이머 (연달아 보내면 모아서 한 번에 답장)
 
         let db = store.get(KEY, null) || { me: null, swipes: {}, matches: [], messages: {} };
         const save = () => store.set(KEY, db);
@@ -749,11 +948,23 @@
               return msg;
             };
             const msg = add(true, body);
-            // 데모: 상대가 잠시 뒤 답장
-            setTimeout(() => {
-              const reply = add(false, REPLIES[Math.floor(Math.random() * REPLIES.length)]);
-              listeners?.onMessage(reply);
-            }, 1200 + Math.random() * 1500);
+            // 데모: 상대가 메시지를 읽고(잠깐 뒤) 입력 중… 표시 후 답장
+            const match = db.matches.find((m) => m.id === matchId);
+            const p = (pending[matchId] ||= { texts: [], timer: null });
+            p.texts.push(body);
+            clearTimeout(p.timer);
+            p.timer = setTimeout(() => {
+              const text = p.texts.join(" ");
+              delete pending[matchId];
+              const memory = ((db.chat ||= {})[matchId] ||= { greeted: false, asked: [] });
+              const answer = reply(byId(match.otherId), db.me, text, memory);
+              save();
+              listeners?.onTyping?.(matchId, true);
+              setTimeout(() => {
+                listeners?.onTyping?.(matchId, false);
+                listeners?.onMessage(add(false, answer));
+              }, Math.min(4000, 700 + answer.length * 45));
+            }, 900 + Math.random() * 600);
             return msg;
           },
           subscribe(l) { listeners = l; return () => { listeners = null; }; },
@@ -1315,6 +1526,7 @@
         const box = $("#msgs");
         if (box.querySelector(`[data-id="${CSS.escape(String(msg.id))}"]`)) return; // 중복 방지
         box.querySelector(".chat-hello")?.remove();
+        $("#typing")?.remove();
         const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
         const side = msg.mine ? "mine" : "other";
         box.insertAdjacentHTML("beforeend",
@@ -1344,6 +1556,14 @@
           alert("전송하지 못했어요: " + (err.message || err));
         }
       });
+
+      function onTyping(matchId, on) {
+        $("#typing")?.remove();
+        if (!on || !state.openMatch || String(state.openMatch.id) !== String(matchId)) return;
+        const box = $("#msgs");
+        box.insertAdjacentHTML("beforeend", `<div class="msg other typing" id="typing" aria-label="입력 중"><i></i><i></i><i></i></div>`);
+        box.scrollTop = box.scrollHeight;
+      }
 
       function onMessage(msg) {
         if (state.openMatch && String(state.openMatch.id) === String(msg.matchId)) {
@@ -1393,7 +1613,7 @@
         selectTab("discover");
         updateDot();
         state.unsubscribe?.();
-        state.unsubscribe = api.subscribe({ onMessage, onMatch });
+        state.unsubscribe = api.subscribe({ onMessage, onMatch, onTyping });
         await Promise.all([loadDeck(), refreshMatches()]);
       }
 
