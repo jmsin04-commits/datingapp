@@ -13,6 +13,20 @@ create table if not exists public.profiles (
   created_at timestamptz not null default now()
 );
 
+-- 사진: Storage 'photos' 버킷 안의 경로 목록 (최대 4장, 반드시 '<내 id>/...' 폴더)
+create or replace function public.valid_photo_paths(owner uuid, paths text[])
+returns boolean
+language sql
+immutable
+as $$
+  select coalesce(bool_and(p like owner::text || '/%' and p !~ '\.\.' and char_length(p) <= 200), true)
+  from unnest(paths) as p;
+$$;
+alter table public.profiles add column if not exists photos text[] not null default '{}';
+alter table public.profiles drop constraint if exists profiles_photos_check;
+alter table public.profiles add constraint profiles_photos_check
+  check (cardinality(photos) <= 4 and public.valid_photo_paths(id, photos));
+
 alter table public.profiles enable row level security;
 drop policy if exists "signed-in users read profiles" on public.profiles;
 create policy "signed-in users read profiles" on public.profiles
@@ -140,6 +154,7 @@ $$;
 grant execute on function public.get_candidates(int, int, text, text) to authenticated;
 
 -- 내 매칭 목록 + 상대 프로필 + 마지막 메시지 (최근 대화 순)
+drop function if exists public.my_matches();  -- 반환 컬럼이 바뀌면 다시 만들어야 함
 create or replace function public.my_matches()
 returns table (
   match_id bigint,
@@ -151,6 +166,7 @@ returns table (
   other_region text,
   other_interests text[],
   other_bio text,
+  other_photos text[],
   last_body text,
   last_at timestamptz
 )
@@ -159,7 +175,7 @@ stable
 set search_path = public
 as $$
   select m.id, m.created_at,
-         p.id, p.name, p.birth_year, p.gender, p.region, p.interests, p.bio,
+         p.id, p.name, p.birth_year, p.gender, p.region, p.interests, p.bio, p.photos,
          lm.body, lm.created_at
   from matches m
   join profiles p on p.id = case when m.user_a = auth.uid() then m.user_b else m.user_a end
@@ -178,3 +194,27 @@ exception when duplicate_object then null; end $$;
 do $$ begin
   alter publication supabase_realtime add table public.matches;
 exception when duplicate_object then null; end $$;
+
+-- ───────────── 프로필 사진 저장소 ─────────────
+-- 공개 버킷 (링크로 누구나 볼 수 있음), JPEG/PNG/WebP, 장당 5MB 이하
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('photos', 'photos', true, 5242880, array['image/jpeg', 'image/png', 'image/webp'])
+on conflict (id) do update
+  set public = excluded.public,
+      file_size_limit = excluded.file_size_limit,
+      allowed_mime_types = excluded.allowed_mime_types;
+
+-- 로그인한 사람은 자기 폴더(<내 id>/)에만 올리고 지울 수 있음
+drop policy if exists "upload own photos" on storage.objects;
+create policy "upload own photos" on storage.objects
+  for insert to authenticated
+  with check (bucket_id = 'photos' and (storage.foldername(name))[1] = auth.uid()::text);
+drop policy if exists "delete own photos" on storage.objects;
+create policy "delete own photos" on storage.objects
+  for delete to authenticated
+  using (bucket_id = 'photos' and (storage.foldername(name))[1] = auth.uid()::text);
+-- (Storage에서 파일을 지우려면 그 파일에 대한 조회 권한도 필요)
+drop policy if exists "read own photo objects" on storage.objects;
+create policy "read own photo objects" on storage.objects
+  for select to authenticated
+  using (bucket_id = 'photos' and (storage.foldername(name))[1] = auth.uid()::text);

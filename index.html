@@ -106,6 +106,27 @@
     .seg input:checked + span { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 700; }
     .seg input:focus-visible + span { outline: 2px solid var(--accent); }
 
+    .photo-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .slot {
+      position: relative; aspect-ratio: 3 / 4; border-radius: 12px; overflow: hidden;
+      border: 1px dashed var(--line); background: var(--surface);
+      display: grid; place-items: center; color: var(--muted); font-size: 1.6rem; padding: 0;
+    }
+    .slot.add { border-color: var(--accent); color: var(--accent); }
+    .slot img { width: 100%; height: 100%; object-fit: cover; }
+    .slot .rm {
+      position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; border-radius: 50%;
+      border: 0; background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 0.75rem; display: grid; place-items: center;
+    }
+    .slot .main-badge {
+      position: absolute; left: 4px; bottom: 4px; font-size: 0.65rem; font-weight: 700;
+      background: var(--accent); color: var(--accent-text); padding: 1px 6px; border-radius: 999px;
+    }
+    .spin {
+      width: 22px; height: 22px; border-radius: 50%; border: 3px solid var(--accent-soft);
+      border-top-color: var(--accent); animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
     .chips { display: flex; flex-wrap: wrap; gap: 6px; }
     .chip {
       border: 1px solid var(--line); background: var(--surface); border-radius: 999px;
@@ -136,6 +157,17 @@
       font-size: clamp(4rem, 22vw, 8rem); font-weight: 800; color: rgba(255, 255, 255, 0.92);
       text-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
     }
+    .card .photo { position: relative; overflow: hidden; }
+    .card .photo.has-img { background: #111; }
+    .card .photo img {
+      position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+      display: none; pointer-events: none; -webkit-user-drag: none;
+    }
+    .card .photo img.active { display: block; }
+    .bars { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; gap: 4px; z-index: 1; }
+    .bars i { flex: 1; height: 3px; border-radius: 2px; background: rgba(255, 255, 255, 0.45); }
+    .bars i.on { background: #fff; }
+    .stamp { z-index: 2; }
     .card .info { padding: 16px 18px 20px; }
     .card .name { font-size: 1.5rem; font-weight: 800; margin: 0; letter-spacing: -0.02em; }
     .card .name small { font-size: 1.1rem; font-weight: 500; color: var(--muted); margin-left: 6px; }
@@ -186,8 +218,9 @@
     .new-matches button { border: 0; background: none; padding: 0; text-align: center; font-size: 0.8rem; flex: none; width: 64px; }
     .avatar {
       width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center;
-      color: #fff; font-weight: 800; font-size: 1.3rem; flex: none;
+      color: #fff; font-weight: 800; font-size: 1.3rem; flex: none; overflow: hidden; background: var(--line);
     }
+    .avatar img { width: 100%; height: 100%; object-fit: cover; }
     .new-matches .avatar { width: 60px; height: 60px; margin: 0 auto 4px; box-shadow: 0 0 0 3px var(--bg), 0 0 0 5px var(--accent); }
     .convo {
       display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 0;
@@ -274,6 +307,11 @@
       <button class="icon-btn" id="setup-cancel" type="button" hidden>취소</button></div>
     <div class="screen scroll">
       <form class="form" id="profile-form">
+        <div class="field"><span class="label">사진 <span class="hint">(최대 4장 · 첫 번째가 대표 사진)</span></span>
+          <div class="photo-grid" id="photo-grid"></div>
+          <input type="file" id="photo-input" accept="image/*" multiple hidden>
+        </div>
+        <br>
         <label class="field"><span class="label">이름 (닉네임)</span>
           <input type="text" name="name" maxlength="20" required></label>
         <label class="field"><span class="label">태어난 해 <span class="hint">(만 19세 이상)</span></span>
@@ -411,6 +449,7 @@
       const INTERESTS = ["여행", "맛집", "카페", "운동", "등산", "러닝", "영화", "음악", "독서", "게임",
         "요리", "사진", "반려동물", "공연", "드라이브", "패션", "와인", "전시회"];
       const MAX_INTERESTS = 5;
+      const MAX_PHOTOS = 4;
       const THIS_YEAR = new Date().getFullYear();
       const DEFAULT_FILTERS = { min_age: 19, max_age: 45, region: "", interest: "" };
 
@@ -441,13 +480,36 @@
           try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
           catch { return fallback; }
         },
-        set(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} },
+        set(key, value) {
+          try { localStorage.setItem(key, JSON.stringify(value)); return true; } catch { return false; }
+        },
         del(key) { try { localStorage.removeItem(key); } catch {} },
       };
 
+      // 사진을 긴 변 max px의 JPEG로 줄임 (용량 절약 + 위치정보 등 EXIF 제거)
+      async function resizeImage(file, max, quality) {
+        const url = URL.createObjectURL(file);
+        try {
+          const img = new Image();
+          img.src = url;
+          try { await img.decode(); } catch { throw new Error("이미지 파일을 읽을 수 없어요."); }
+          const scale = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.round(img.naturalWidth * scale);
+          canvas.height = Math.round(img.naturalHeight * scale);
+          canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+          const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+          if (!blob) throw new Error("이미지를 변환하지 못했어요.");
+          return blob;
+        } finally {
+          URL.revokeObjectURL(url);
+        }
+      }
+
       // ───────────────────────────────────────────────
       // 데이터 계층: Supabase(온라인) / 데모(로컬) 가 같은 함수를 제공
-      //   profile = { id, name, birth_year, gender, looking_for, region, interests[], bio }
+      //   profile = { id, name, birth_year, gender, looking_for, region, interests[], bio, photos[] }
+      //   photos  = 저장값 배열 (온라인: Storage 경로, 데모: data URL) → 화면에는 api.photoUrl()로 표시
       //   match   = { id, at, other: profile, last: { body, at } | null }
       //   message = { id, matchId, mine, body, at }
       // ───────────────────────────────────────────────
@@ -456,9 +518,20 @@
         let uid = null;
         const check = ({ data, error }) => { if (error) throw error; return data; };
         const toMessage = (r) => ({ id: r.id, matchId: r.match_id, mine: r.sender_id === uid, body: r.body, at: r.created_at });
+        const PHOTO_BASE = SUPABASE_URL.replace(/\/+$/, "") + "/storage/v1/object/public/photos/";
 
         return {
           online: true,
+          photoUrl: (v) => PHOTO_BASE + v.split("/").map(encodeURIComponent).join("/"),
+          async uploadPhoto(file) {
+            const blob = await resizeImage(file, 1080, 0.85);
+            const path = `${uid}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
+            check(await sb.storage.from("photos").upload(path, blob, { contentType: "image/jpeg", cacheControl: "31536000" }));
+            return path;
+          },
+          deletePhotos(paths) {
+            if (paths.length) sb.storage.from("photos").remove(paths).catch((err) => console.error(err));
+          },
           async session() {
             const { data } = await sb.auth.getSession();
             uid = data.session?.user.id ?? null;
@@ -497,7 +570,7 @@
               at: r.matched_at,
               other: {
                 id: r.other_id, name: r.other_name, birth_year: r.other_birth_year, gender: r.other_gender,
-                region: r.other_region, interests: r.other_interests, bio: r.other_bio,
+                region: r.other_region, interests: r.other_interests, bio: r.other_bio, photos: r.other_photos,
               },
               last: r.last_body ? { body: r.last_body, at: r.last_at } : null,
             }));
@@ -562,8 +635,27 @@
           online: false,
           async session() { return true; },
           async signOut() { store.del(KEY); db = { me: null, swipes: {}, matches: [], messages: {} }; },
+          photoUrl: (v) => v,
+          async uploadPhoto(file) {
+            const blob = await resizeImage(file, 640, 0.8);
+            return new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result);
+              reader.onerror = () => reject(new Error("이미지를 읽지 못했어요."));
+              reader.readAsDataURL(blob);
+            });
+          },
+          deletePhotos() {},
           async myProfile() { return db.me; },
-          async saveProfile(p) { db.me = { ...p, id: "me" }; save(); return db.me; },
+          async saveProfile(p) {
+            const prev = db.me;
+            db.me = { ...p, id: "me" };
+            if (!save()) {
+              db.me = prev;
+              throw new Error("브라우저 저장 공간이 부족해요. 사진 수를 줄여주세요.");
+            }
+            return db.me;
+          },
           async candidates(f) {
             const me = db.me;
             return PROFILES.filter((p) =>
@@ -661,7 +753,7 @@
       function cardHTML(p, extraClass = "") {
         return `
           <div class="card ${extraClass}" data-id="${esc(p.id)}">
-            <div class="photo" style="${gradient(p.id)}">${initial(p)}</div>
+            ${photoHTML(p)}
             <div class="info">
               <p class="name">${esc(p.name)}<small>${age(p)}</small></p>
               <p class="meta">📍 ${esc(p.region)}</p>
@@ -672,8 +764,32 @@
             <div class="stamp nope">NOPE</div>
           </div>`;
       }
-      function avatarHTML(p) {
-        return `<div class="avatar" style="${gradient(p.id)}">${initial(p)}</div>`;
+      function photoHTML(p) {
+        const photos = p.photos || [];
+        if (photos.length === 0) return `<div class="photo" style="${gradient(p.id)}">${initial(p)}</div>`;
+        return `
+          <div class="photo has-img">
+            ${photos.length > 1 ? `<div class="bars">${photos.map((_, i) => `<i class="${i === 0 ? "on" : ""}"></i>`).join("")}</div>` : ""}
+            ${photos.map((v, i) => `<img src="${esc(api.photoUrl(v))}" alt="" draggable="false" class="${i === 0 ? "active" : ""}">`).join("")}
+          </div>`;
+      }
+      function avatarHTML(p, id = "") {
+        const idAttr = id ? ` id="${id}"` : "";
+        const first = (p.photos || [])[0];
+        return first
+          ? `<div class="avatar"${idAttr}><img src="${esc(api.photoUrl(first))}" alt=""></div>`
+          : `<div class="avatar"${idAttr} style="${gradient(p.id)}">${initial(p)}</div>`;
+      }
+      // 카드 사진 넘기기: 왼쪽 절반 탭 = 이전, 오른쪽 절반 = 다음
+      function cyclePhoto(card, clientX) {
+        const imgs = card.querySelectorAll(".photo img");
+        if (imgs.length < 2) return;
+        const bars = card.querySelectorAll(".bars i");
+        const cur = [...imgs].findIndex((img) => img.classList.contains("active"));
+        const rect = card.getBoundingClientRect();
+        const next = Math.max(0, Math.min(imgs.length - 1, cur + (clientX - rect.left < rect.width / 2 ? -1 : 1)));
+        imgs.forEach((img, i) => img.classList.toggle("active", i === next));
+        bars.forEach((bar, i) => bar.classList.toggle("on", i === next));
       }
 
       // ───── 로그인 ─────
@@ -702,7 +818,10 @@
       // ───── 프로필 작성/수정 ─────
       function openSetup(editing) {
         const form = $("#profile-form");
-        const p = state.me || { name: "", birth_year: "", gender: "", looking_for: "", region: "서울", interests: [], bio: "" };
+        const p = state.me || { name: "", birth_year: "", gender: "", looking_for: "", region: "서울", interests: [], bio: "", photos: [] };
+        photoEdit.list = [...(p.photos || [])];
+        photoEdit.uploaded = [];
+        renderPhotoGrid();
         form.elements.name.value = p.name;
         form.elements.birth_year.value = p.birth_year;
         form.elements.birth_year.min = 1940;
@@ -719,7 +838,60 @@
         $("#setup-error").textContent = "";
         show("setup");
       }
-      $("#setup-cancel").addEventListener("click", () => show("main"));
+      $("#setup-cancel").addEventListener("click", () => {
+        // 이번에 올렸지만 저장하지 않은 사진은 지움
+        const kept = state.me?.photos || [];
+        api.deletePhotos(photoEdit.uploaded.filter((v) => !kept.includes(v)));
+        photoEdit.uploaded = [];
+        show("main");
+      });
+
+      // ───── 프로필 사진 ─────
+      const photoEdit = { list: [], uploaded: [], uploading: false };
+      function renderPhotoGrid() {
+        const { list, uploading } = photoEdit;
+        $("#photo-grid").innerHTML = Array.from({ length: MAX_PHOTOS }, (_, i) => {
+          const v = list[i];
+          if (v) {
+            return `<div class="slot"><img src="${esc(api.photoUrl(v))}" alt="">
+              <button type="button" class="rm" data-rm="${i}" aria-label="사진 삭제">✕</button>
+              ${i === 0 ? `<span class="main-badge">대표</span>` : ""}</div>`;
+          }
+          if (i === list.length) {
+            return `<button type="button" class="slot add" data-add ${uploading ? "disabled" : ""}
+              aria-label="사진 추가">${uploading ? `<span class="spin"></span>` : "+"}</button>`;
+          }
+          return `<div class="slot"></div>`;
+        }).join("");
+      }
+      $("#photo-grid").addEventListener("click", (e) => {
+        if (e.target.closest("[data-add]")) $("#photo-input").click();
+        const rm = e.target.closest("[data-rm]");
+        if (rm) {
+          photoEdit.list.splice(Number(rm.dataset.rm), 1);
+          renderPhotoGrid();
+        }
+      });
+      $("#photo-input").addEventListener("change", async (e) => {
+        const files = [...e.target.files].slice(0, MAX_PHOTOS - photoEdit.list.length);
+        e.target.value = "";
+        if (files.length === 0) return;
+        $("#setup-error").textContent = "";
+        photoEdit.uploading = true;
+        renderPhotoGrid();
+        for (const file of files) {
+          try {
+            const v = await api.uploadPhoto(file);
+            photoEdit.list.push(v);
+            photoEdit.uploaded.push(v);
+            renderPhotoGrid();
+          } catch (err) {
+            $("#setup-error").textContent = "사진을 올리지 못했어요: " + (err.message || err);
+          }
+        }
+        photoEdit.uploading = false;
+        renderPhotoGrid();
+      });
       $("#profile-form").addEventListener("submit", async (e) => {
         e.preventDefault();
         const form = e.target;
@@ -733,12 +905,18 @@
           region: form.elements.region.value,
           interests,
           bio: form.elements.bio.value.trim(),
+          photos: [...photoEdit.list],
         };
+        if (photoEdit.uploading) { $("#setup-error").textContent = "사진을 올리는 중이에요. 잠시만 기다려주세요."; return; }
         const submit = form.querySelector("[type=submit]");
         submit.disabled = true;
         try {
           const first = !state.me;
+          const before = [...(state.me?.photos || []), ...photoEdit.uploaded];
           state.me = await api.saveProfile(profile);
+          // 빠진 사진은 저장소에서도 삭제
+          api.deletePhotos([...new Set(before)].filter((v) => !profile.photos.includes(v)));
+          photoEdit.uploaded = [];
           if (first) await startMain();
           else { show("main"); renderMe(); loadDeck(); }
         } catch (err) {
@@ -794,10 +972,10 @@
       });
 
       function bindDrag(card) {
-        let startX = 0, startY = 0, dx = 0, dragging = false;
+        let startX = 0, startY = 0, dx = 0, dy = 0, dragging = false;
         card.addEventListener("pointerdown", (e) => {
           if (state.busy) return;
-          dragging = true; dx = 0;
+          dragging = true; dx = 0; dy = 0;
           startX = e.clientX; startY = e.clientY;
           card.setPointerCapture(e.pointerId);
           card.style.transition = "none";
@@ -805,18 +983,19 @@
         card.addEventListener("pointermove", (e) => {
           if (!dragging) return;
           dx = e.clientX - startX;
-          const dy = (e.clientY - startY) * 0.3;
-          card.style.transform = `translate(${dx}px, ${dy}px) rotate(${dx / 18}deg)`;
+          dy = e.clientY - startY;
+          card.style.transform = `translate(${dx}px, ${dy * 0.3}px) rotate(${dx / 18}deg)`;
           card.style.setProperty("--like", Math.max(0, Math.min(1, dx / 100)));
           card.style.setProperty("--nope", Math.max(0, Math.min(1, -dx / 100)));
         });
-        const end = () => {
+        const end = (e) => {
           if (!dragging) return;
           dragging = false;
           card.style.transition = "";
           if (Math.abs(dx) > 100) {
             swipe(dx > 0);
           } else {
+            if (e.type === "pointerup" && Math.abs(dx) < 6 && Math.abs(dy) < 6) cyclePhoto(card, e.clientX);
             card.style.transform = "";
             card.style.setProperty("--like", 0);
             card.style.setProperty("--nope", 0);
@@ -959,7 +1138,7 @@
         saveUnread();
         updateDot();
         const o = match.other;
-        $("#chat-avatar").outerHTML = `<div class="avatar" id="chat-avatar" style="${gradient(o.id)}">${initial(o)}</div>`;
+        $("#chat-avatar").outerHTML = avatarHTML(o, "chat-avatar");
         $("#chat-name").textContent = o.name;
         $("#chat-sub").textContent = `${age(o)}세 · ${o.region} · ${(o.interests || []).join(", ")}`;
         $("#msgs").innerHTML = "";
@@ -1041,6 +1220,10 @@
         $("#sign-out").textContent = api.online ? "로그아웃" : "데모 초기화";
       }
       $("#edit-profile").addEventListener("click", () => openSetup(true));
+      $("#me-card").addEventListener("click", (e) => {
+        const card = e.target.closest(".card");
+        if (card) cyclePhoto(card, e.clientX);
+      });
       $("#sign-out").addEventListener("click", async () => {
         if (!api.online && !confirm("데모 데이터(프로필, 매칭, 채팅)를 모두 지울까요?")) return;
         state.unsubscribe?.();
