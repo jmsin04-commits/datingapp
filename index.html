@@ -957,23 +957,50 @@
           }
           return llm.ok;
         }
-        async function llmReply(other, history) {
+        const person = (x) => ({ name: x.name, age: age(x), gender: x.gender, region: x.region, interests: x.interests, job: x.job, bio: x.bio });
+        const llmBody = (other, history, extra = {}) => JSON.stringify({
+          persona: person(other), me: person(db.me), history: history.map((m) => ({ mine: m.mine, body: m.body })), ...extra,
+        });
+        // 채팅방을 열면 그 사람 프로필·대화를 LLM이 미리 읽어 둠 → 첫 답장도 빠르게
+        function llmPrefill(other, history) {
+          if (!llm.ok) return;
+          fetch(LLM_URL.replace(/\/+$/, "") + "/prefill", {
+            method: "POST", headers: { "Content-Type": "application/json" }, body: llmBody(other, history),
+          }).catch(() => {});
+        }
+        // 문장이 완성될 때마다 onText(지금까지의 답장)를 부름. 최종 답장(실패 시 null)을 돌려줌
+        async function llmReply(other, history, onText) {
           // 꺼져 있던 서버는 1분마다 다시 확인
           if (!llm.ok && !(LLM_URL && Date.now() - llm.checkedAt > 60000 && await checkLlm())) return null;
-          const person = (x) => ({ name: x.name, age: age(x), gender: x.gender, region: x.region, interests: x.interests, job: x.job, bio: x.bio });
+          let text = "";
           try {
             const res = await fetch(LLM_URL.replace(/\/+$/, "") + "/reply", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ persona: person(other), me: person(db.me), history: history.map((m) => ({ mine: m.mine, body: m.body })) }),
+              body: llmBody(other, history, { stream: true }),
               signal: AbortSignal.timeout(90000),
             });
-            const data = await res.json();
-            return res.ok && data.reply ? data.reply : null;
+            if (!res.ok || !res.body) return null;
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let buf = "";
+            for (;;) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              buf += decoder.decode(value, { stream: true });
+              const lines = buf.split("\n");
+              buf = lines.pop();
+              for (const line of lines) {
+                if (!line) continue;
+                const data = JSON.parse(line);
+                if (data.text) { text = data.text; onText(text); }
+              }
+            }
+            return text || null;
           } catch (err) {
             console.warn("로컬 LLM 응답 실패 → 기본 답장 사용", err);
             llm.ok = false;
-            return null;
+            return text || null;
           }
         }
 
@@ -1031,8 +1058,8 @@
           },
           async messages(matchId) { return db.messages[matchId] || []; },
           async send(matchId, body) {
-            const add = (mine, text) => {
-              const msg = { id: Date.now() + Math.random(), matchId, mine, body: text, at: new Date().toISOString() };
+            const add = (mine, text, id = Date.now() + Math.random(), at = new Date().toISOString()) => {
+              const msg = { id, matchId, mine, body: text, at };
               (db.messages[matchId] ||= []).push(msg);
               save();
               return msg;
@@ -1048,21 +1075,33 @@
               delete pending[matchId];
               const other = byId(match.otherId);
               listeners?.onTyping?.(matchId, true);
-              // 로컬 LLM이 켜져 있으면 LLM이, 아니면 규칙 기반으로 답장
-              let answer = await llmReply(other, (db.messages[matchId] || []).slice(-12));
-              if (!answer) {
-                const memory = ((db.chat ||= {})[matchId] ||= { greeted: false, asked: [] });
-                answer = reply(other, db.me, text, memory);
-                save();
-                await new Promise((r) => setTimeout(r, Math.min(4000, 700 + answer.length * 45)));
+              // 로컬 LLM이 켜져 있으면 LLM이 (첫 문장부터 바로 보여주며), 아니면 규칙 기반으로 답장
+              const id = Date.now() + Math.random(), at = new Date().toISOString();
+              const llmAnswer = await llmReply(other, (db.messages[matchId] || []).slice(-12),
+                (partial) => {
+                  listeners?.onMessage({ id, matchId, mine: false, body: partial, at });
+                  listeners?.onTyping?.(matchId, true); // 다음 문장 쓰는 중
+                });
+              if (llmAnswer) {
+                listeners?.onTyping?.(matchId, false);
+                listeners?.onMessage(add(false, llmAnswer, id, at));
+                return;
               }
+              const memory = ((db.chat ||= {})[matchId] ||= { greeted: false, asked: [] });
+              const answer = reply(other, db.me, text, memory);
+              save();
+              await new Promise((r) => setTimeout(r, Math.min(4000, 700 + answer.length * 45)));
               listeners?.onTyping?.(matchId, false);
               listeners?.onMessage(add(false, answer));
-            }, 900 + Math.random() * 600);
+            }, llm.ok ? 400 : 900 + Math.random() * 600); // 연달아 보내는 메시지를 모으는 시간
             return msg;
           },
           subscribe(l) { listeners = l; return () => { listeners = null; }; },
           checkLlm,
+          prefill(matchId) {
+            const m = db.matches.find((x) => x.id === matchId);
+            if (m) llmPrefill(byId(m.otherId), (db.messages[matchId] || []).slice(-12));
+          },
         };
       }
 
@@ -1629,6 +1668,7 @@
         $("#chat-sub").textContent = `${age(o)}세 · ${o.region} · ${(o.interests || []).join(", ")}`;
         $("#msgs").innerHTML = "";
         $("#chat").hidden = false;
+        api.prefill?.(match.id);
         try {
           const list = await api.messages(match.id);
           if (state.openMatch !== match) return;
@@ -1645,7 +1685,13 @@
 
       function appendMessage(msg) {
         const box = $("#msgs");
-        if (box.querySelector(`[data-id="${CSS.escape(String(msg.id))}"]`)) return; // 중복 방지
+        const existing = box.querySelector(`[data-id="${CSS.escape(String(msg.id))}"]`);
+        if (existing) { // 이미 있는 메시지면 (답장이 문장 단위로 이어지는 중) 내용만 갱신
+          const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+          existing.textContent = msg.body;
+          if (nearBottom) box.scrollTop = box.scrollHeight;
+          return;
+        }
         box.querySelector(".chat-hello")?.remove();
         $("#typing")?.remove();
         const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
