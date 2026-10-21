@@ -201,32 +201,47 @@
     .view-toggle button[aria-pressed=true] { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
 
     /* ───── 목록 보기 (여러 명) ───── */
+    /* 한 줄에 5명. 목록 보기일 때는 화면을 넓게 씀 (PC) */
+    #main.wide { max-width: 1000px; }
     .grid {
-      flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(2, 1fr);
-      gap: 10px; align-content: start; padding: 2px 2px 16px;
+      flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 6px; align-content: start; padding: 2px 2px 16px;
     }
     .grid .empty { grid-column: 1 / -1; min-height: 60vh; }
     .tile {
-      position: relative; aspect-ratio: 3 / 4; border-radius: 16px; overflow: hidden;
-      background: var(--line); box-shadow: var(--shadow); transition: transform 0.25s ease, opacity 0.25s ease;
+      position: relative; aspect-ratio: 3 / 4; border-radius: 10px; overflow: hidden;
+      background: var(--line); box-shadow: 0 2px 8px rgba(60, 20, 30, 0.12); transition: transform 0.25s ease, opacity 0.25s ease;
     }
     .tile.gone { transform: scale(0.85); opacity: 0; }
     .tile-open { position: absolute; inset: 0; width: 100%; border: 0; padding: 0; background: none; color: #fff; text-align: left; }
     .tile-open .ph {
       position: absolute; inset: 0; display: grid; place-items: center;
-      font-size: 3rem; font-weight: 800; color: rgba(255, 255, 255, 0.92);
+      font-size: clamp(1.4rem, 6vw, 3rem); font-weight: 800; color: rgba(255, 255, 255, 0.92);
     }
     .tile-open .ph img { width: 100%; height: 100%; object-fit: cover; }
     .tile-open .cap {
-      position: absolute; left: 0; right: 0; bottom: 0; padding: 32px 52px 10px 12px;
-      background: linear-gradient(transparent, rgba(0, 0, 0, 0.65));
+      position: absolute; left: 0; right: 0; bottom: 0; padding: 18px 5px 5px;
+      background: linear-gradient(transparent, rgba(0, 0, 0, 0.7)); line-height: 1.25;
     }
-    .tile-open .cap b { font-size: 1.05rem; }
-    .tile-open .cap small { display: block; font-size: 0.8rem; opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tile-open .cap b, .tile-open .cap small {
+      display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .tile-open .cap b { font-size: 0.8rem; }
+    .tile-open .cap small { font-size: 0.65rem; opacity: 0.9; }
+    .tile-open .cap .ints { display: none; }
     .tile-like {
-      position: absolute; right: 8px; bottom: 8px; width: 40px; height: 40px; border-radius: 50%;
-      border: 0; background: var(--surface); color: var(--accent); font-size: 1.2rem;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); display: grid; place-items: center;
+      position: absolute; right: 4px; top: 4px; width: 26px; height: 26px; border-radius: 50%;
+      border: 0; padding: 0; background: var(--surface); color: var(--accent); font-size: 0.8rem;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); display: grid; place-items: center;
+    }
+    @media (min-width: 640px) {
+      .grid { gap: 12px; }
+      .tile { border-radius: 14px; }
+      .tile-open .cap { padding: 28px 10px 10px; }
+      .tile-open .cap b { font-size: 1rem; }
+      .tile-open .cap small { font-size: 0.78rem; }
+      .tile-open .cap .ints { display: block; }
+      .tile-like { width: 36px; height: 36px; right: 8px; top: 8px; font-size: 1.1rem; }
     }
     .tile-like:active { transform: scale(0.9); }
 
@@ -1229,6 +1244,7 @@
           b.setAttribute("aria-selected", String(b.dataset.tab === name));
         }
         for (const t of ["discover", "chats", "me"]) $("#tab-" + t).hidden = t !== name;
+        $("#main").classList.toggle("wide", name === "discover" && state.view === "grid");
         if (name === "chats") refreshMatches();
         if (name === "me") renderMe();
       }
@@ -1261,6 +1277,7 @@
           b.setAttribute("aria-pressed", String(b.dataset.view === state.view));
         }
         $("#grid").hidden = !grid;
+        $("#main").classList.toggle("wide", grid);
         $("#deck").hidden = grid;
         if (grid) { $("#actions").hidden = true; renderGrid(); }
         else renderDeck();
@@ -1283,7 +1300,7 @@
           <div class="tile" data-id="${esc(p.id)}">
             <button type="button" class="tile-open" data-open="${esc(p.id)}" aria-label="${esc(p.name)} 프로필 보기">
               ${ph}
-              <div class="cap"><b>${esc(p.name)} ${age(p)}</b><small>📍 ${esc(p.region)} · ${esc((p.interests || []).join(" · "))}</small></div>
+              <div class="cap"><b>${esc(p.name)} ${age(p)}</b><small>${esc(p.region)}</small><small class="ints">${esc((p.interests || []).join(" · "))}</small></div>
             </button>
             <button type="button" class="tile-like" data-like="${esc(p.id)}" aria-label="${esc(p.name)}님 좋아요">♥</button>
           </div>`;
