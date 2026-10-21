@@ -2,6 +2,7 @@
 # 로컬에서 소개팅 앱 + 로컬 LLM 서버를 한 번에 실행
 #   ./run_local.sh              → http://localhost:8000 (LLM: 3B)
 #   ./run_local.sh --model 1.5b → 더 빠른 1.5B 모델
+#   ./run_local.sh --lan        → 같은 와이파이의 폰에서도 (http://<PC IP>:7861, README 참고)
 # 종료: Ctrl+C (둘 다 함께 꺼짐)
 set -e
 cd "$(dirname "$0")"
@@ -24,6 +25,7 @@ done
 
 echo
 echo "  준비 완료 → 브라우저에서 http://localhost:8000"
+case " $* " in *" --lan "*) echo "  폰(같은 와이파이)에서는 → http://<이 PC의 IP>:7861  (Windows 설정은 README 참고)";; esac
 echo "  (데모 모드, 채팅 상대는 로컬 LLM이 대답합니다. 종료: Ctrl+C)"
 echo
 python3 -m http.server 8000 --bind 127.0.0.1

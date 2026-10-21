@@ -4,8 +4,11 @@
     python3 llm_server.py                # 기본: 3B 모델, http://localhost:7861
     python3 llm_server.py --model 1.5b   # 더 빠르지만 덜 자연스러운 1.5B 모델
 
+    python3 llm_server.py --lan          # 같은 와이파이의 폰에서도 쓰기 (README 참고)
+
 서버를 켠 PC의 브라우저에서 소개팅 앱(데모 모드)을 열면 자동으로 연결된다.
-서버가 꺼져 있거나 다른 기기(폰)에서 열면 기존 규칙 기반 답장으로 동작한다.
+--lan 으로 켜면 이 서버가 앱 화면도 함께 보내 주므로, 폰에서 http://<PC IP>:7861 로 열면
+앱과 LLM이 같은 주소라 바로 연결된다. 서버가 꺼져 있으면 기존 규칙 기반 답장으로 동작한다.
 """
 
 import argparse
@@ -69,7 +72,11 @@ state = {}
 
 
 def allowed(origin: str | None) -> bool:
-    return origin is not None and (origin in ALLOWED_ORIGINS or bool(LOCAL_ORIGIN.match(origin)))
+    if origin is None:
+        return False
+    # 이 서버가 보낸 앱 화면(같은 주소)에서 온 요청은 허용 (--lan 으로 폰에서 열었을 때)
+    same_origin = origin == f"{request.scheme}://{request.host}"
+    return same_origin or origin in ALLOWED_ORIGINS or bool(LOCAL_ORIGIN.match(origin))
 
 
 @app.after_request
@@ -83,6 +90,12 @@ def cors(resp):
         resp.headers["Access-Control-Allow-Private-Network"] = "true"
         resp.headers["Vary"] = "Origin"
     return resp
+
+
+@app.get("/")
+def index():
+    # 앱은 index.html 한 파일. 다른 파일(이 서버 코드 등)은 보내지 않음
+    return Response((Path(__file__).parent / "index.html").read_text(encoding="utf-8"), mimetype="text/html")
 
 
 @app.route("/health", methods=["GET", "OPTIONS"])
@@ -265,6 +278,8 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", choices=["0.5b", "1.5b", "3b"], default="3b")
     parser.add_argument("--port", type=int, default=7861)
+    parser.add_argument("--lan", action="store_true",
+                        help="같은 와이파이의 다른 기기(폰)에서도 접속 허용 (기본: 이 PC에서만)")
     # 스레드가 너무 많으면 오히려 느려짐 (i5-1240P 기준 4개: 80토큰 13초, 16개: 133초)
     parser.add_argument("--threads", type=int, default=4, help="답장 만들 때 스레드 수")
     parser.add_argument("--batch-threads", type=int, default=8, help="프롬프트 읽을 때 스레드 수")
@@ -288,9 +303,12 @@ def main() -> None:
     print("규칙 미리 읽는 중...")
     state["llm"].create_chat_completion(messages=[{"role": "system", "content": RULES}], max_tokens=1)
     threading.Thread(target=prefill_worker, daemon=True).start()
-    print(f"\n소개팅 데모용 LLM 서버 시작: http://localhost:{args.port}  (종료: Ctrl+C)\n")
-    # 127.0.0.1: 이 PC 안에서만 접속 가능 (같은 와이파이의 다른 기기에는 열지 않음)
-    app.run(host="127.0.0.1", port=args.port, threaded=True)
+    print(f"\n소개팅 데모용 LLM 서버 시작: http://localhost:{args.port}  (종료: Ctrl+C)")
+    if args.lan:
+        print(f"폰(같은 와이파이)에서: http://<이 PC의 IP>:{args.port}  — Windows 쪽 설정은 README 참고")
+    print()
+    # 기본 127.0.0.1: 이 PC 안에서만 접속 가능. --lan 이면 0.0.0.0 (같은 네트워크의 기기도 접속 가능)
+    app.run(host="0.0.0.0" if args.lan else "127.0.0.1", port=args.port, threaded=True)
 
 
 if __name__ == "__main__":

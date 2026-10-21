@@ -934,17 +934,23 @@
         };
 
         // ───── 로컬 LLM 연결 (llm_server.py) ─────
-        const llm = { ok: false, checkedAt: 0 };
+        const llm = { ok: false, checkedAt: 0, base: "" };
+        // LLM 서버 주소 후보: ① 이 페이지를 보낸 서버 자신 (llm_server.py --lan 으로 폰에서 연 경우)
+        //                    ② 설정의 LLM_URL (같은 PC에서 GitHub Pages나 localhost:8000으로 연 경우)
+        const llmCandidates = () => [
+          ...(location.protocol === "http:" ? [location.origin] : []),
+          ...(LLM_URL ? [LLM_URL.replace(/\/+$/, "")] : []),
+        ];
         async function checkLlm() {
-          if (!LLM_URL) return false;
           llm.checkedAt = Date.now();
-          try {
-            const res = await fetch(LLM_URL.replace(/\/+$/, "") + "/health", { signal: AbortSignal.timeout(1500) });
-            llm.ok = res.ok;
-          } catch {
-            llm.ok = false;
+          for (const base of llmCandidates()) {
+            try {
+              const res = await fetch(base + "/health", { signal: AbortSignal.timeout(1500) });
+              if (res.ok && (await res.json()).ok) { llm.ok = true; llm.base = base; return true; }
+            } catch {}
           }
-          return llm.ok;
+          llm.ok = false;
+          return false;
         }
         const person = (x) => ({ name: x.name, age: age(x), gender: x.gender, region: x.region, interests: x.interests, job: x.job, bio: x.bio });
         const llmBody = (other, history, extra = {}) => JSON.stringify({
@@ -953,17 +959,17 @@
         // 채팅방을 열면 그 사람 프로필·대화를 LLM이 미리 읽어 둠 → 첫 답장도 빠르게
         function llmPrefill(other, history) {
           if (!llm.ok) return;
-          fetch(LLM_URL.replace(/\/+$/, "") + "/prefill", {
+          fetch(llm.base + "/prefill", {
             method: "POST", headers: { "Content-Type": "application/json" }, body: llmBody(other, history),
           }).catch(() => {});
         }
         // 문장이 완성될 때마다 onText(지금까지의 답장)를 부름. 최종 답장(실패 시 null)을 돌려줌
         async function llmReply(other, history, onText) {
           // 꺼져 있던 서버는 1분마다 다시 확인
-          if (!llm.ok && !(LLM_URL && Date.now() - llm.checkedAt > 60000 && await checkLlm())) return null;
+          if (!llm.ok && !(Date.now() - llm.checkedAt > 60000 && await checkLlm())) return null;
           let text = "";
           try {
-            const res = await fetch(LLM_URL.replace(/\/+$/, "") + "/reply", {
+            const res = await fetch(llm.base + "/reply", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: llmBody(other, history, { stream: true }),

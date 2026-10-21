@@ -89,7 +89,28 @@ python3 llm_server.py --model 1.5b     # 더 빠르지만 덜 자연스러움
 
 - 서버를 켠 **같은 PC의 브라우저**에서 앱을 열면 자동 연결되고, 제목 옆에 `데모 · AI 대화`가 표시됩니다.
   (GitHub Pages 주소로 열어도, 로컬 `python3 -m http.server`로 열어도 됩니다)
-- 폰에서 열거나 서버가 꺼져 있으면 기존 규칙 기반 답장으로 자동 전환됩니다.
+- 서버가 꺼져 있으면 기존 규칙 기반 답장으로 자동 전환됩니다.
+
+### 폰에서도 LLM 대화 쓰기 (같은 와이파이)
+
+GitHub Pages 주소를 폰에서 열면 폰은 PC의 LLM에 닿을 수 없어서 규칙 기반 답장이 나옵니다.
+PC와 폰이 **같은 와이파이**라면, LLM 서버가 앱 화면까지 보내 주는 방식으로 폰에서도 LLM과 대화할 수 있습니다.
+
+1. PC에서 `./run_local.sh --lan` (또는 `python3 llm_server.py --lan`)
+2. Windows 설정 (처음 한 번):
+   - VS Code 설정(`Ctrl+,`)에서 **Remote: Local Port Host** → `allInterfaces`
+     (Dev Container의 포트를 Windows의 모든 네트워크에 연결. 바꾼 뒤 VS Code 창 다시 열기)
+   - **관리자 PowerShell**에서 방화벽 허용 (집·학교 등 '개인' 네트워크에서만):
+     ```powershell
+     New-NetFirewallRule -DisplayName "datingapp LLM" -Direction Inbound -Protocol TCP -LocalPort 7861 -Action Allow -Profile Private
+     ```
+   - 와이파이가 '공용 네트워크'로 되어 있으면 Windows 설정 → 네트워크 → 해당 와이파이 → **개인 네트워크**로 변경
+3. PowerShell에서 `ipconfig` → Wi-Fi의 **IPv4 주소** 확인 (예: `192.168.0.12`)
+4. 폰 브라우저에서 `http://192.168.0.12:7861` → 제목 옆에 `데모 · AI 대화`가 뜨면 성공
+
+- 같은 와이파이의 다른 사람도 이 주소로 접속할 수 있으니, 다 쓰면 서버를 끄세요 (Ctrl+C).
+  필요 없으면 방화벽 규칙은 `Remove-NetFirewallRule -DisplayName "datingapp LLM"` 으로 지웁니다.
+- 서버는 앱 화면(`index.html`)과 LLM 요청만 받고, 다른 파일은 보내지 않습니다.
 - 답장은 문장 단위로 바로바로 보여줍니다: 첫 문장 약 2~4초, 전체 4~8초. 남은 문장을 쓰는 동안 "입력 중…"이 표시됩니다.
   (채팅방을 열면 그 사람의 프로필을 미리 읽어 두므로, 첫 메시지를 쓰는 동안 준비가 끝납니다. 서버 시작은 30초 정도)
 - 대화 내용은 내 PC 밖으로 나가지 않습니다. 서버는 이 PC 안(127.0.0.1)에서만 열리고,
