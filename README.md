@@ -74,6 +74,14 @@
 데모 모드의 채팅 상대는 기본적으로 정해진 규칙으로 답합니다.
 `../local-llm`의 Qwen2.5 모델을 켜 두면, 상대가 **자기 프로필(나이·직업·관심사·자기소개)대로 행동하는 사람처럼** 대답합니다.
 
+가장 쉬운 방법: 앱 + LLM 서버를 한 번에 켜기
+
+```bash
+./run_local.sh                         # → 브라우저에서 http://localhost:8000 (종료: Ctrl+C)
+```
+
+따로 켜려면:
+
 ```bash
 pip install llama-cpp-python flask     # 처음 한 번 (local-llm 때 설치했다면 생략)
 python3 llm_server.py                  # 3B 모델, http://localhost:7861
