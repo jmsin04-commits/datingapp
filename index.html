@@ -208,38 +208,41 @@
       gap: 6px; align-content: start; padding: 2px 2px 16px;
     }
     .grid .empty { grid-column: 1 / -1; min-height: 60vh; }
-    .tile {
-      position: relative; aspect-ratio: 3 / 4; border-radius: 10px; overflow: hidden;
-      background: var(--line); box-shadow: 0 2px 8px rgba(60, 20, 30, 0.12); transition: transform 0.25s ease, opacity 0.25s ease;
-    }
+    .tile { position: relative; min-width: 0; transition: transform 0.25s ease, opacity 0.25s ease; }
     .tile.gone { transform: scale(0.85); opacity: 0; }
-    .tile-open { position: absolute; inset: 0; width: 100%; border: 0; padding: 0; background: none; color: #fff; text-align: left; }
+    .tile-open { display: block; width: 100%; border: 0; padding: 0; background: none; color: var(--text); text-align: left; }
+    /* 사진 칸: 3:4 비율 (padding 방식이라 줄 높이가 정확히 잡혀 칸끼리 겹치지 않음) */
     .tile-open .ph {
-      position: absolute; inset: 0; display: grid; place-items: center;
-      font-size: clamp(1.4rem, 6vw, 3rem); font-weight: 800; color: rgba(255, 255, 255, 0.92);
+      position: relative; border-radius: 10px; overflow: hidden; background: var(--line);
+      box-shadow: 0 2px 8px rgba(60, 20, 30, 0.12);
     }
-    .tile-open .ph img { width: 100%; height: 100%; object-fit: cover; }
-    .tile-open .cap {
-      position: absolute; left: 0; right: 0; bottom: 0; padding: 18px 5px 5px;
-      background: linear-gradient(transparent, rgba(0, 0, 0, 0.7)); line-height: 1.25;
+    .tile-open .ph::before { content: ""; display: block; padding-top: 133.33%; }
+    .tile-open .ph > img, .tile-open .ph > span {
+      position: absolute; inset: 0; width: 100%; height: 100%;
     }
+    .tile-open .ph > img { object-fit: cover; }
+    .tile-open .ph > span {
+      display: grid; place-items: center; font-size: clamp(0.95rem, 4.5vw, 3rem); line-height: 1; font-weight: 800; padding-top: 14%; color: rgba(255, 255, 255, 0.92);
+    }
+    /* 이름·정보는 사진 아래에 (사진·♥와 겹치지 않게) */
+    .tile-open .cap { padding: 4px 2px 0; line-height: 1.3; }
     .tile-open .cap b, .tile-open .cap small {
       display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-    .tile-open .cap b { font-size: 0.8rem; }
-    .tile-open .cap small { font-size: 0.65rem; opacity: 0.9; }
+    .tile-open .cap b { font-size: 0.78rem; }
+    .tile-open .cap small { font-size: 0.68rem; color: var(--muted); }
     .tile-open .cap .ints { display: none; }
     .tile-like {
-      position: absolute; right: 4px; top: 4px; width: 26px; height: 26px; border-radius: 50%;
-      border: 0; padding: 0; background: var(--surface); color: var(--accent); font-size: 0.8rem;
+      position: absolute; right: 3px; top: 3px; width: 22px; height: 22px; border-radius: 50%;
+      border: 0; padding: 0; background: var(--surface); color: var(--accent); font-size: 0.7rem;
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); display: grid; place-items: center;
     }
     @media (min-width: 640px) {
-      .grid { gap: 12px; }
-      .tile { border-radius: 14px; }
-      .tile-open .cap { padding: 28px 10px 10px; }
+      .grid { gap: 16px 12px; }
+      .tile-open .ph { border-radius: 14px; }
+      .tile-open .cap { padding: 8px 2px 0; }
       .tile-open .cap b { font-size: 1rem; }
-      .tile-open .cap small { font-size: 0.78rem; }
+      .tile-open .cap small { font-size: 0.8rem; }
       .tile-open .cap .ints { display: block; }
       .tile-like { width: 36px; height: 36px; right: 8px; top: 8px; font-size: 1.1rem; }
     }
@@ -1295,7 +1298,7 @@
         const first = (p.photos || [])[0];
         const ph = first
           ? `<div class="ph"><img src="${esc(api.photoUrl(first))}" alt="" loading="lazy"></div>`
-          : `<div class="ph" style="${gradient(p.id)}">${initial(p)}</div>`;
+          : `<div class="ph" style="${gradient(p.id)}"><span>${initial(p)}</span></div>`;
         return `
           <div class="tile" data-id="${esc(p.id)}">
             <button type="button" class="tile-open" data-open="${esc(p.id)}" aria-label="${esc(p.name)} 프로필 보기">
