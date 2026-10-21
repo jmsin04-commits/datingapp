@@ -195,6 +195,46 @@
     .round.like { color: var(--accent); }
     .round:active { transform: scale(0.92); }
 
+    .top-actions { display: flex; gap: 8px; align-items: center; }
+    .view-toggle { display: flex; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+    .view-toggle button { border: 0; background: var(--surface); padding: 8px 12px; font-size: 0.9rem; color: var(--muted); }
+    .view-toggle button[aria-pressed=true] { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+
+    /* ───── 목록 보기 (여러 명) ───── */
+    .grid {
+      flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(2, 1fr);
+      gap: 10px; align-content: start; padding: 2px 2px 16px;
+    }
+    .grid .empty { grid-column: 1 / -1; min-height: 60vh; }
+    .tile {
+      position: relative; aspect-ratio: 3 / 4; border-radius: 16px; overflow: hidden;
+      background: var(--line); box-shadow: var(--shadow); transition: transform 0.25s ease, opacity 0.25s ease;
+    }
+    .tile.gone { transform: scale(0.85); opacity: 0; }
+    .tile-open { position: absolute; inset: 0; width: 100%; border: 0; padding: 0; background: none; color: #fff; text-align: left; }
+    .tile-open .ph {
+      position: absolute; inset: 0; display: grid; place-items: center;
+      font-size: 3rem; font-weight: 800; color: rgba(255, 255, 255, 0.92);
+    }
+    .tile-open .ph img { width: 100%; height: 100%; object-fit: cover; }
+    .tile-open .cap {
+      position: absolute; left: 0; right: 0; bottom: 0; padding: 32px 52px 10px 12px;
+      background: linear-gradient(transparent, rgba(0, 0, 0, 0.65));
+    }
+    .tile-open .cap b { font-size: 1.05rem; }
+    .tile-open .cap small { display: block; font-size: 0.8rem; opacity: 0.9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tile-like {
+      position: absolute; right: 8px; bottom: 8px; width: 40px; height: 40px; border-radius: 50%;
+      border: 0; background: var(--surface); color: var(--accent); font-size: 1.2rem;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2); display: grid; place-items: center;
+    }
+    .tile-like:active { transform: scale(0.9); }
+
+    .profile-dialog { padding: 16px; }
+    .detail-card { position: relative; height: min(60vh, 520px); margin-bottom: 8px; }
+    .detail-card .card { touch-action: auto; box-shadow: none; border: 1px solid var(--line); }
+    .profile-dialog .actions { padding: 8px 0 16px; }
+
     .empty { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; color: var(--muted); gap: 12px; padding: 24px; }
     .empty .big { font-size: 3rem; }
     .empty .btn { width: auto; }
@@ -350,8 +390,15 @@
     <section class="screen" id="tab-discover">
       <div class="top">
         <h1>설레임<span class="pill" id="demo-pill" hidden>데모</span></h1>
-        <button class="icon-btn" id="open-filter" type="button">⚙︎ 필터</button>
+        <div class="top-actions">
+          <div class="view-toggle" role="group" aria-label="보기 방식">
+            <button type="button" data-view="card" aria-pressed="true">카드</button>
+            <button type="button" data-view="grid" aria-pressed="false">목록</button>
+          </div>
+          <button class="icon-btn" id="open-filter" type="button">⚙︎ 필터</button>
+        </div>
       </div>
+      <div class="grid" id="grid" hidden></div>
       <div class="deck" id="deck"></div>
       <div class="actions" id="actions">
         <button class="round pass" id="btn-pass" type="button" aria-label="넘기기">✕</button>
@@ -417,6 +464,16 @@
         <button class="btn" value="apply" type="submit">적용</button>
       </div>
     </form>
+  </dialog>
+
+  <!-- ───────── 프로필 자세히 (목록 보기에서) ───────── -->
+  <dialog id="profile-dialog" class="profile-dialog">
+    <div class="detail-card" id="detail-card"></div>
+    <div class="actions">
+      <button class="round pass" id="detail-pass" type="button" aria-label="넘기기">✕</button>
+      <button class="round like" id="detail-like" type="button" aria-label="좋아요">♥</button>
+    </div>
+    <button class="btn ghost" id="detail-close" type="button">닫기</button>
   </dialog>
 
   <!-- ───────── 매칭 성공 ───────── -->
@@ -724,6 +781,7 @@
         openMatch: null,
         unread: new Set(store.get("seollem-unread", [])),
         unsubscribe: null,
+        view: store.get("seollem-view", "card") === "grid" ? "grid" : "card",
       };
       const saveUnread = () => store.set("seollem-unread", [...state.unread]);
 
@@ -948,7 +1006,102 @@
           state.deck = [];
           console.error(err);
         }
-        renderDeck();
+        renderDiscover();
+      }
+
+      const EMPTY_HTML = `
+        <div class="empty">
+          <div class="big">🌙</div>
+          <div>조건에 맞는 사람을 모두 봤어요.<br>필터를 넓히거나 나중에 다시 와주세요.</div>
+          <button class="btn" type="button" data-action="filter">필터 바꾸기</button>
+        </div>`;
+
+      function renderDiscover() {
+        const grid = state.view === "grid";
+        for (const b of document.querySelectorAll(".view-toggle button")) {
+          b.setAttribute("aria-pressed", String(b.dataset.view === state.view));
+        }
+        $("#grid").hidden = !grid;
+        $("#deck").hidden = grid;
+        if (grid) { $("#actions").hidden = true; renderGrid(); }
+        else renderDeck();
+      }
+      document.querySelector(".view-toggle").addEventListener("click", (e) => {
+        const b = e.target.closest("[data-view]");
+        if (!b || state.busy) return;
+        state.view = b.dataset.view;
+        store.set("seollem-view", state.view);
+        renderDiscover();
+      });
+
+      // ───── 목록 보기: 여러 명을 한 화면에 ─────
+      function tileHTML(p) {
+        const first = (p.photos || [])[0];
+        const ph = first
+          ? `<div class="ph"><img src="${esc(api.photoUrl(first))}" alt="" loading="lazy"></div>`
+          : `<div class="ph" style="${gradient(p.id)}">${initial(p)}</div>`;
+        return `
+          <div class="tile" data-id="${esc(p.id)}">
+            <button type="button" class="tile-open" data-open="${esc(p.id)}" aria-label="${esc(p.name)} 프로필 보기">
+              ${ph}
+              <div class="cap"><b>${esc(p.name)} ${age(p)}</b><small>📍 ${esc(p.region)} · ${esc((p.interests || []).join(" · "))}</small></div>
+            </button>
+            <button type="button" class="tile-like" data-like="${esc(p.id)}" aria-label="${esc(p.name)}님 좋아요">♥</button>
+          </div>`;
+      }
+      function renderGrid() {
+        $("#grid").innerHTML = state.deck.length ? state.deck.map(tileHTML).join("") : EMPTY_HTML;
+      }
+      const findPerson = (id) => state.deck.find((p) => String(p.id) === id);
+
+      $("#grid").addEventListener("click", (e) => {
+        if (e.target.closest("[data-action=filter]")) return openFilter();
+        const like = e.target.closest("[data-like]");
+        if (like) {
+          const p = findPerson(like.dataset.like);
+          if (p) decideFromGrid(p, true);
+          return;
+        }
+        const open = e.target.closest("[data-open]");
+        if (open) {
+          const p = findPerson(open.dataset.open);
+          if (p) openDetail(p);
+        }
+      });
+
+      // 목록에서 좋아요/넘기기: 해당 칸만 사라지고 스크롤 위치는 유지
+      async function decideFromGrid(person, like) {
+        const tile = $(`#grid .tile[data-id="${CSS.escape(String(person.id))}"]`);
+        if (!tile || tile.classList.contains("gone")) return;
+        tile.classList.add("gone");
+        const [result] = await Promise.all([decide(person, like), new Promise((r) => setTimeout(r, 250))]);
+        if (!result.ok) { tile.classList.remove("gone"); return; }
+        tile.remove();
+        if (state.deck.length === 0) await loadDeck();
+        if (result.matchId) showMatch(person, result.matchId);
+      }
+
+      // ───── 프로필 자세히 ─────
+      let detailPerson = null;
+      function openDetail(person) {
+        detailPerson = person;
+        $("#detail-card").innerHTML = cardHTML(person);
+        $("#profile-dialog").showModal();
+      }
+      $("#detail-card").addEventListener("click", (e) => {
+        const card = e.target.closest(".card");
+        if (card) cyclePhoto(card, e.clientX);
+      });
+      $("#detail-close").addEventListener("click", () => $("#profile-dialog").close());
+      $("#profile-dialog").addEventListener("click", (e) => {
+        if (e.target === e.currentTarget) e.currentTarget.close(); // 바깥 영역 클릭
+      });
+      for (const [id, like] of [["#detail-like", true], ["#detail-pass", false]]) {
+        $(id).addEventListener("click", () => {
+          const p = detailPerson;
+          $("#profile-dialog").close();
+          if (p) decideFromGrid(p, like);
+        });
       }
 
       function renderDeck() {
@@ -956,12 +1109,7 @@
         const top = state.deck[0];
         $("#actions").hidden = !top;
         if (!top) {
-          deck.innerHTML = `
-            <div class="empty">
-              <div class="big">🌙</div>
-              <div>조건에 맞는 사람을 모두 봤어요.<br>필터를 넓히거나 나중에 다시 와주세요.</div>
-              <button class="btn" type="button" data-action="filter">필터 바꾸기</button>
-            </div>`;
+          deck.innerHTML = EMPTY_HTML;
           return;
         }
         deck.innerHTML = (state.deck[1] ? cardHTML(state.deck[1], "under") : "") + cardHTML(top, "top");
@@ -1017,29 +1165,35 @@
         const under = $("#deck .card.under");
         if (under) under.classList.remove("under");
 
-        let matchId = null;
-        try {
-          [matchId] = await Promise.all([api.swipe(person.id, like), new Promise((r) => setTimeout(r, 280))]);
-        } catch (err) {
-          console.error(err);
-          alert("저장하지 못했어요. 잠시 후 다시 시도해 주세요.");
-        }
-        state.deck.shift();
+        const [result] = await Promise.all([decide(person, like), new Promise((r) => setTimeout(r, 280))]);
         if (state.deck.length === 0) await loadDeck();
         else renderDeck();
         state.busy = false;
+        if (result.matchId) showMatch(person, result.matchId);
+      }
 
+      // 좋아요/넘기기 저장 + 후보에서 빼기 (카드/목록 공통)
+      async function decide(person, like) {
+        let matchId = null;
+        try {
+          matchId = await api.swipe(person.id, like);
+        } catch (err) {
+          console.error(err);
+          alert("저장하지 못했어요. 잠시 후 다시 시도해 주세요.");
+          return { ok: false, matchId: null };
+        }
+        state.deck = state.deck.filter((p) => p.id !== person.id);
         if (matchId) {
           state.unread.add(String(matchId));
           saveUnread();
           updateDot();
-          showMatch(person, matchId);
         }
+        return { ok: true, matchId };
       }
       $("#btn-like").addEventListener("click", () => swipe(true));
       $("#btn-pass").addEventListener("click", () => swipe(false));
       document.addEventListener("keydown", (e) => {
-        if ($("#main").hidden || $("#tab-discover").hidden || !$("#chat").hidden
+        if ($("#main").hidden || $("#tab-discover").hidden || !$("#chat").hidden || state.view !== "card"
           || document.querySelector("dialog[open]") || e.target.closest("input, textarea, select")) return;
         if (e.key === "ArrowRight") swipe(true);
         if (e.key === "ArrowLeft") swipe(false);
