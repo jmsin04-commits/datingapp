@@ -1,8 +1,8 @@
 """데모 채팅 상대를 로컬 LLM으로 대답하게 하는 서버 (../local-llm 의 모델을 그대로 사용).
 
 사용법:
-    python3 llm_server.py                # 기본: 3B 모델, http://localhost:7861
-    python3 llm_server.py --model 1.5b   # 더 빠르지만 덜 자연스러운 1.5B 모델
+    python3 llm_server.py                # 기본: EXAONE 2.4B 모델(한국어가 가장 자연스러움), http://localhost:7861
+    python3 llm_server.py --model 3b     # 예전 기본 모델 Qwen2.5-3B
 
     python3 llm_server.py --lan          # 같은 와이파이의 폰에서도 쓰기 (README 참고)
 
@@ -36,7 +36,8 @@ GENDER = {"M": "남성", "F": "여성"}
 RULES = """너는 소개팅 앱에서 방금 서로 '좋아요'를 눌러 매칭된 실제 사람이다. 아래 [너의 프로필]의 사람으로서 대화한다.
 
 [말투와 규칙]
-- 카카오톡 하듯 짧게 1~2문장으로 답한다. 해요체 존댓말, 가끔 'ㅎㅎ'나 이모지 하나.
+- 카카오톡 하듯 짧게 1~2문장, 50자 이내로 답한다. 해요체 존댓말, 가끔 'ㅎㅎ'나 이모지 하나.
+- 굵은 글씨(**)나 목록 같은 꾸밈 기호는 쓰지 않는다. 상담원처럼 추천하거나 안내하지 않는다.
 - 상대의 말에 먼저 공감하거나 반응하고, 필요하면 질문 하나로 대화를 이어간다.
 - 너의 프로필과 어긋나지 않게 말하고, 이미 한 말과 모순되지 않게 한다.
 - 취미나 주말 이야기는 너의 관심사 안에서 한다. 상대의 관심사를 네 것처럼 말하지 않는다.
@@ -70,7 +71,8 @@ PROFILE = """
 [꼭 지킬 것]
 - 자기 자신은 '저'라고 말한다. '{name}'처럼 자기 이름을 3인칭으로 쓰지 않는다.
 - 상대는 반드시 '{me_name}님'이라고 부른다. 다른 이름으로 부르지 않는다.
-- 반말(너, ~할래?, ~해?)은 쓰지 않고 항상 존댓말을 쓴다."""
+- 반말(너, ~할래?, ~해?)은 쓰지 않고 항상 존댓말을 쓴다.
+- 답장은 반드시 1~2문장, 50자 이내로 짧게 쓴다."""
 
 app = Flask(__name__)
 llm_lock = threading.Lock()  # CPU 하나로 생성하므로 요청은 순서대로 처리
@@ -164,7 +166,10 @@ MBTI = re.compile(r"MBTI|(?<![A-Za-z])[EI][NS][TF][JP](?![A-Za-z])", re.I)  # MB
 
 
 SENTENCE_END = re.compile(r"(?<=[.!?~ㅎㅋ♡😊🙂,])\s+|\n+")  # 쉼표에서도 끊어 첫 조각을 빨리 보냄
-MAX_CHARS = 160
+MAX_CHARS = 100
+MAX_SENTENCES = 2  # 이만큼 문장이 끝나면 생성을 멈춤 (답이 길면 전체 답장이 5초를 넘김)
+MAX_TOKENS = 45
+SENTENCE_DONE = re.compile(r"[.!?~]+(?=\s|$)")
 
 
 def keep(sentence: str) -> bool:
@@ -187,15 +192,15 @@ def fix_names(sentence: str, persona_name: str, me_name: str) -> str:
 
 def polish(sentence: str, persona_name: str, me_name: str) -> str | None:
     """한 문장을 다듬고, 쓰면 안 되는 문장이면 None."""
-    sentence = fix_names(sentence.strip(), persona_name, me_name)
+    sentence = fix_names(sentence.replace("*", "").strip(), persona_name, me_name)
     if not keep(sentence) or BANMAL.search(sentence):
         return None
     return sentence
 
 
 def strip_name(reply: str, persona_name: str) -> str:
-    reply = reply.lstrip().lstrip('"“”')
-    return re.sub(rf"^\s*{re.escape(persona_name)}\s*[:：]\s*", "", reply)
+    reply = reply.lstrip().lstrip('"“”*')
+    return re.sub(rf"^\s*{re.escape(persona_name)}\**\s*[:：]\s*\**\s*", "", reply)
 
 
 def clean(reply: str, persona_name: str, me_name: str = "") -> str:
@@ -235,7 +240,7 @@ def reply():
         for _ in range(2):  # 걸러낸 뒤 남는 게 없으면 한 번 더 시도
             try:
                 out = state["llm"].create_chat_completion(
-                    messages=messages, temperature=0.5, top_p=0.9, repeat_penalty=1.1, max_tokens=60
+                    messages=messages, temperature=0.5, top_p=0.9, repeat_penalty=1.1, max_tokens=MAX_TOKENS
                 )
             except ValueError:  # 대화가 길어 문맥 창을 넘으면 최근 3개만 남기고 다시
                 messages = [messages[0], *messages[-3:]]
@@ -254,22 +259,31 @@ def stream_reply(messages: list, persona_name: str, me_name: str = ""):
     sent = ""
     with llm_lock:
         for _ in range(2):  # 걸러내고 남은 문장이 하나도 없으면 한 번 더 시도
-            buf = ""
+            buf = raw = ""
             try:
                 chunks = state["llm"].create_chat_completion(
-                    messages=messages, stream=True, temperature=0.5, top_p=0.9, repeat_penalty=1.1, max_tokens=60
+                    messages=messages, stream=True, temperature=0.5, top_p=0.9, repeat_penalty=1.1, max_tokens=MAX_TOKENS
                 )
                 for chunk in chunks:
-                    buf += chunk["choices"][0]["delta"].get("content", "")
+                    piece = chunk["choices"][0]["delta"].get("content", "")
+                    buf += piece
+                    raw += piece
                     if not sent:
                         buf = strip_name(buf, persona_name)
                     *done, buf = SENTENCE_END.split(buf)  # 마지막 조각은 아직 끝나지 않은 문장
+                    full = False
                     for sentence in done:
                         sentence = polish(sentence, persona_name, me_name)
-                        if sentence and len(sent) + len(sentence) <= MAX_CHARS:
+                        if sentence and len(sent) + len(sentence) > MAX_CHARS:
+                            full = True  # 더 써 봐야 잘라 버릴 테니 여기서 멈춤
+                            break
+                        if sentence:
                             sent = f"{sent} {sentence}".strip()
                             yield line(text=sent)
-                    if len(sent) >= MAX_CHARS:
+                    if full:
+                        buf = ""
+                        break
+                    if len(SENTENCE_DONE.findall(raw)) >= MAX_SENTENCES:
                         break
                 last = polish(buf, persona_name, me_name)
                 if last and len(sent) + len(last) <= MAX_CHARS:
@@ -319,7 +333,7 @@ def prefill():
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", choices=["0.5b", "1.5b", "3b"], default="3b")
+    parser.add_argument("--model", choices=["exaone", "0.5b", "1.5b", "3b"], default="exaone")
     parser.add_argument("--port", type=int, default=7861)
     parser.add_argument("--lan", action="store_true",
                         help="같은 와이파이의 다른 기기(폰)에서도 접속 허용 (기본: 이 PC에서만)")

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # 로컬에서 소개팅 앱 + 로컬 LLM 서버를 한 번에 실행
-#   ./run_local.sh              → http://localhost:8000 (LLM: 3B)
-#   ./run_local.sh --model 1.5b → 더 빠른 1.5B 모델
+#   ./run_local.sh              → http://localhost:8000 (LLM: EXAONE 2.4B)
+#   ./run_local.sh --model 3b   → 예전 모델 Qwen2.5-3B
 #   ./run_local.sh --lan        → 같은 와이파이의 폰에서도 (http://<PC IP>:7861, README 참고)
 #   ./run_local.sh --lan --port 5000 → 같은 와이파이에서 http://<PC IP>:5000
 # 종료: Ctrl+C (둘 다 함께 꺼짐)

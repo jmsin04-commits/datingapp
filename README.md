@@ -71,7 +71,7 @@
 ## 로컬 LLM으로 데모 채팅 상대 똑똑하게 하기 (선택)
 
 데모 모드의 채팅 상대는 기본적으로 정해진 규칙으로 답합니다.
-`../local-llm`의 Qwen2.5 모델을 켜 두면, 상대가 **자기 프로필(나이·직업·관심사·자기소개)대로 행동하는 사람처럼** 대답합니다.
+`../local-llm`의 EXAONE 3.5 모델(LG AI연구원)을 켜 두면, 상대가 **자기 프로필(나이·직업·관심사·자기소개)대로 행동하는 사람처럼** 대답합니다.
 
 가장 쉬운 방법: 앱 + LLM 서버를 한 번에 켜기
 
@@ -83,13 +83,14 @@
 
 ```bash
 pip install llama-cpp-python flask     # 처음 한 번 (local-llm 때 설치했다면 생략)
-python3 llm_server.py                  # 3B 모델, http://localhost:7861
-python3 llm_server.py --model 1.5b     # 더 빠르지만 덜 자연스러움
+python3 llm_server.py                  # EXAONE 2.4B 모델, http://localhost:7861
+python3 llm_server.py --model 3b       # 예전 모델 Qwen2.5-3B
 ```
 
 - 서버를 켠 **같은 PC의 브라우저**에서 앱을 열면 자동 연결되고, 제목 옆에 `데모 · AI 대화`가 표시됩니다.
   (GitHub Pages 주소로 열어도, 로컬 `python3 -m http.server`로 열어도 됩니다)
 - 서버가 꺼져 있으면 기존 규칙 기반 답장으로 자동 전환됩니다.
+- EXAONE은 라이선스상 **비상업적 용도**(과제·개인 데모)만 쓸 수 있습니다. 실제 서비스로 내놓을 때는 `--model 3b`(Qwen2.5, 상업적 사용 가능)를 쓰세요.
 
 ### 폰에서도 LLM 대화 쓰기 (같은 와이파이)
 
